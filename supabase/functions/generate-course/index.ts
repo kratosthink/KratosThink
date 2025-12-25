@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const languageMap: Record<string, string> = {
+  fr: 'Français',
+  en: 'English',
+  it: 'Italiano',
+  es: 'Español',
+  de: 'Deutsch',
+  ro: 'Română',
+  ru: 'Русский',
+  ar: 'العربية',
+  zh: '中文',
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -37,48 +49,67 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    console.log(`Generating course for topic: ${topic}, language: ${language}, user: ${user.id}`);
+    const targetLanguage = languageMap[language] || 'Français';
+    console.log(`Generating course for topic: ${topic}, language: ${targetLanguage}, user: ${user.id}`);
 
-    // Generate course structure with AI
-    const prompt = `Tu es un expert en création de cours éducatifs. Crée un cours complet sur le sujet suivant: "${topic}"
+    // Generate course structure with AI - Enhanced prompt for richer content
+    const prompt = `Tu es un expert pédagogue et créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
+
+IMPORTANT: Tout le contenu DOIT être rédigé en ${targetLanguage}.
 
 Génère un cours avec 5 leçons. Pour chaque leçon, fournis:
-1. Un titre clair
-2. Un contenu détaillé (200-300 mots) avec des explications pédagogiques
-3. Un quiz de 3 questions (format QCM avec 4 options, indique l'index de la bonne réponse 0-3)
-4. Une structure de mind map simple
+
+1. Un titre clair et engageant (en ${targetLanguage})
+
+2. Un contenu TRÈS détaillé (500-700 mots minimum) structuré avec:
+   - Une introduction qui contextualise le sujet
+   - Plusieurs paragraphes bien séparés avec des sauts de ligne
+   - Des explications progressives du simple au complexe
+   - Des exemples concrets et pratiques
+   - Des analogies pour faciliter la compréhension
+   - Une conclusion résumant les points clés
+   
+   IMPORTANT: Utilise des doubles sauts de ligne (\\n\\n) entre les paragraphes pour une meilleure lisibilité.
+
+3. Un quiz de 5 questions variées:
+   - 2 questions de compréhension
+   - 2 questions d'application
+   - 1 question de réflexion/analyse
+   Format: QCM avec 4 options, indique l'index de la bonne réponse (0-3)
+
+4. Une structure de mind map riche avec le concept central et 3-5 branches principales, chacune avec 2-3 sous-branches
 
 Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
 {
-  "title": "Titre du cours",
-  "description": "Description courte du cours",
+  "title": "Titre du cours en ${targetLanguage}",
+  "description": "Description engageante du cours (2-3 phrases) en ${targetLanguage}",
   "lessons": [
     {
-      "title": "Titre de la leçon",
-      "content": "Contenu de la leçon...",
+      "title": "Titre de la leçon en ${targetLanguage}",
+      "content": "Contenu détaillé avec paragraphes séparés par \\n\\n en ${targetLanguage}...",
       "quiz": [
         {
-          "question": "Question ?",
+          "question": "Question en ${targetLanguage} ?",
           "options": ["Option A", "Option B", "Option C", "Option D"],
           "correct": 0
         }
       ],
       "mindmap": {
         "id": "root",
-        "label": "Concept principal",
+        "label": "Concept principal en ${targetLanguage}",
         "children": [
           {
             "id": "child1",
-            "label": "Sous-concept 1",
-            "children": []
+            "label": "Branche 1",
+            "children": [
+              { "id": "child1-1", "label": "Sous-concept", "children": [] }
+            ]
           }
         ]
       }
     }
   ]
-}
-
-Langue: ${language === 'fr' ? 'Français' : language === 'en' ? 'English' : language}`;
+}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
