@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  isTyping?: boolean;
 }
 
 interface LessonChatProps {
@@ -30,7 +31,10 @@ export const LessonChat: React.FC<LessonChatProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [displayedContent, setDisplayedContent] = useState('');
+  const [isTypingEffect, setIsTypingEffect] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -42,7 +46,16 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, displayedContent]);
+
+  // Cleanup typing effect on unmount
+  useEffect(() => {
+    return () => {
+      if (typingIntervalRef.current) {
+        clearInterval(typingIntervalRef.current);
+      }
+    };
+  }, []);
 
   const fetchMessages = async () => {
     const { data } = await supabase
@@ -60,6 +73,40 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       })));
     }
   };
+
+  const typeMessage = useCallback((fullContent: string, messageId: string) => {
+    let currentIndex = 0;
+    setIsTypingEffect(true);
+    setDisplayedContent('');
+
+    // Variable typing speed to simulate human typing
+    const getTypingDelay = () => {
+      const base = 20;
+      const variation = Math.random() * 40;
+      // Pause longer on punctuation
+      const char = fullContent[currentIndex];
+      if (char === '.' || char === '!' || char === '?') return base + 150 + variation;
+      if (char === ',') return base + 80 + variation;
+      if (char === ' ') return base + 10 + variation;
+      return base + variation;
+    };
+
+    const typeNextChar = () => {
+      if (currentIndex < fullContent.length) {
+        currentIndex++;
+        setDisplayedContent(fullContent.substring(0, currentIndex));
+        typingIntervalRef.current = setTimeout(typeNextChar, getTypingDelay());
+      } else {
+        setIsTypingEffect(false);
+        // Update the message with full content
+        setMessages(prev => prev.map(m => 
+          m.id === messageId ? { ...m, content: fullContent, isTyping: false } : m
+        ));
+      }
+    };
+
+    typeNextChar();
+  }, []);
 
   const handleSend = async () => {
     if (!input.trim() || loading || !user) return;
@@ -92,7 +139,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
 
       if (error) throw error;
 
-      const assistantMessage = data?.response || 'Désolé, je n\'ai pas pu répondre.';
+      const assistantMessage = data?.response || "Désolé, je n'ai pas pu répondre.";
       
       // Save assistant message
       await supabase.from('chat_messages').insert({
@@ -102,19 +149,25 @@ export const LessonChat: React.FC<LessonChatProps> = ({
         content: assistantMessage,
       });
 
+      const assistantId = crypto.randomUUID();
       setMessages(prev => [...prev, { 
-        id: crypto.randomUUID(), 
+        id: assistantId, 
         role: 'assistant', 
-        content: assistantMessage 
+        content: '',
+        isTyping: true
       }]);
+
+      // Start typing effect
+      setLoading(false);
+      typeMessage(assistantMessage, assistantId);
+
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'assistant', 
-        content: 'Erreur lors de la communication avec l\'assistant.' 
+        content: "Erreur lors de la communication avec l'assistant." 
       }]);
-    } finally {
       setLoading(false);
     }
   };
@@ -123,8 +176,8 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     <Card className="border-border/50 flex flex-col h-[500px]">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Bot className="h-5 w-5 text-accent" />
-          Assistant IA - {lessonTitle}
+          <Bot className="h-5 w-5 text-muted-foreground" />
+          {t('course.chat')} - {lessonTitle}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col overflow-hidden pb-4">
@@ -134,7 +187,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
               <div>
                 <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">
-                  Posez une question sur cette leçon et l'assistant vous aidera à comprendre.
+                  {t('chat.placeholder')}
                 </p>
               </div>
             </div>
@@ -146,18 +199,20 @@ export const LessonChat: React.FC<LessonChatProps> = ({
                   className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                       <Bot className="h-4 w-4" />
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
                       message.role === 'user'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary text-secondary-foreground'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className={`text-sm whitespace-pre-wrap leading-relaxed ${message.isTyping && isTypingEffect ? 'typing-cursor' : ''}`}>
+                      {message.isTyping && isTypingEffect ? displayedContent : message.content}
+                    </p>
                   </div>
                   {message.role === 'user' && (
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -168,11 +223,11 @@ export const LessonChat: React.FC<LessonChatProps> = ({
               ))}
               {loading && (
                 <div className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                     <Bot className="h-4 w-4" />
                   </div>
-                  <div className="bg-secondary rounded-lg px-4 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="bg-secondary rounded-lg px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
                 </div>
               )}
@@ -186,10 +241,10 @@ export const LessonChat: React.FC<LessonChatProps> = ({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder={t('chat.placeholder')}
-            disabled={loading}
+            disabled={loading || isTypingEffect}
             className="flex-1"
           />
-          <Button onClick={handleSend} disabled={loading || !input.trim()} size="icon">
+          <Button onClick={handleSend} disabled={loading || isTypingEffect || !input.trim()} size="icon">
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

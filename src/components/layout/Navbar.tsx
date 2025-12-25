@@ -15,11 +15,10 @@ import {
   BookOpen, 
   User, 
   LogOut, 
-  Settings, 
   Moon, 
   Sun, 
   Globe,
-  Menu
+  Lightbulb
 } from 'lucide-react';
 import { Language, languageNames } from '@/i18n/translations';
 
@@ -40,10 +39,10 @@ export const Navbar: React.FC = () => {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <BookOpen className="h-5 w-5 text-primary-foreground" />
+            <Lightbulb className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-display text-xl font-semibold text-foreground">
-            LearnAI
+          <span className="text-xl font-semibold text-foreground tracking-tight">
+            Thoughts
           </span>
         </Link>
 
@@ -75,7 +74,7 @@ export const Navbar: React.FC = () => {
                 <DropdownMenuItem
                   key={lang}
                   onClick={() => setLanguage(lang)}
-                  className={language === lang ? 'bg-accent' : ''}
+                  className={language === lang ? 'bg-accent text-accent-foreground' : ''}
                 >
                   {languageNames[lang]}
                 </DropdownMenuItem>
