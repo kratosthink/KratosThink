@@ -1,1 +1,7 @@
 project_id = "nyvtpamnbsadltuctxwz"
+
+[functions.generate-course]
+verify_jwt = false
+
+[functions.lesson-chat]
+verify_jwt = false
