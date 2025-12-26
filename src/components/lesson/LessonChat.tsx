@@ -79,15 +79,13 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     setIsTypingEffect(true);
     setDisplayedContent('');
 
-    // Variable typing speed to simulate human typing
+  // Fast typing speed
     const getTypingDelay = () => {
-      const base = 20;
-      const variation = Math.random() * 40;
-      // Pause longer on punctuation
+      const base = 5;
+      const variation = Math.random() * 10;
       const char = fullContent[currentIndex];
-      if (char === '.' || char === '!' || char === '?') return base + 150 + variation;
-      if (char === ',') return base + 80 + variation;
-      if (char === ' ') return base + 10 + variation;
+      if (char === '.' || char === '!' || char === '?') return base + 30 + variation;
+      if (char === ',') return base + 15 + variation;
       return base + variation;
     };
 
