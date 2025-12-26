@@ -7,15 +7,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   BookOpen, 
   Trophy, 
   Flame, 
   CheckCircle,
   ArrowRight,
-  Plus
+  Plus,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Profile {
   full_name: string | null;
@@ -31,15 +44,27 @@ interface Course {
   completed_lessons: number;
   status: string;
   created_at: string;
+  language: string | null;
+}
+
+interface TranslatedCourse {
+  id: string;
+  title: string;
 }
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [translating, setTranslating] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -53,9 +78,15 @@ const Dashboard: React.FC = () => {
     }
   }, [user]);
 
+  // Translate course titles when language changes
+  useEffect(() => {
+    if (courses.length > 0) {
+      translateCourseTitles();
+    }
+  }, [language, courses]);
+
   const fetchData = async () => {
     try {
-      // Fetch profile
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name, total_points, streak_days')
@@ -66,13 +97,12 @@ const Dashboard: React.FC = () => {
         setProfile(profileData);
       }
 
-      // Fetch courses
       const { data: coursesData } = await supabase
         .from('courses')
         .select('*')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
-        .limit(6);
+        .limit(10);
 
       if (coursesData) {
         setCourses(coursesData);
@@ -82,6 +112,93 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const translateCourseTitles = async () => {
+    // Check if any course needs translation
+    const coursesToTranslate = courses.filter(c => c.language && c.language !== language);
+    
+    if (coursesToTranslate.length === 0) {
+      setTranslatedTitles({});
+      return;
+    }
+
+    setTranslating(true);
+    const newTranslations: Record<string, string> = {};
+
+    for (const course of coursesToTranslate) {
+      try {
+        const { data, error } = await supabase.functions.invoke('translate-content', {
+          body: {
+            title: course.title,
+            content: course.title, // Just translate title
+            targetLanguage: language,
+          },
+        });
+
+        if (!error && data?.title) {
+          newTranslations[course.id] = data.title;
+        }
+      } catch (error) {
+        console.error('Translation error for course:', course.id, error);
+      }
+    }
+
+    setTranslatedTitles(newTranslations);
+    setTranslating(false);
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent, course: Course) => {
+    e.stopPropagation();
+    setCourseToDelete(course);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!courseToDelete) return;
+
+    setDeleting(true);
+    try {
+      // Delete lessons first (cascade should handle this, but being explicit)
+      await supabase
+        .from('lessons')
+        .delete()
+        .eq('course_id', courseToDelete.id);
+
+      // Delete the course
+      const { error } = await supabase
+        .from('courses')
+        .delete()
+        .eq('id', courseToDelete.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setCourses(prev => prev.filter(c => c.id !== courseToDelete.id));
+      
+      toast({
+        title: 'Cours supprimé',
+        description: `"${courseToDelete.title}" a été supprimé.`,
+      });
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de supprimer le cours.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setCourseToDelete(null);
+    }
+  };
+
+  const getDisplayTitle = (course: Course): string => {
+    if (course.language === language || !course.language) {
+      return course.title;
+    }
+    return translatedTitles[course.id] || course.title;
   };
 
   const inProgressCourses = courses.filter(c => c.status === 'in_progress').length;
@@ -146,6 +263,12 @@ const Dashboard: React.FC = () => {
           </h1>
           <p className="text-muted-foreground mt-1">
             Votre progression d'apprentissage
+            {translating && (
+              <span className="ml-2 inline-flex items-center gap-1 text-sm">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Traduction...
+              </span>
+            )}
           </p>
         </div>
 
@@ -212,13 +335,13 @@ const Dashboard: React.FC = () => {
                   return (
                     <div 
                       key={course.id}
-                      className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 transition-colors cursor-pointer animate-fade-in-up"
+                      className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 transition-colors cursor-pointer animate-fade-in-up group"
                       style={{ animationDelay: `${index * 50}ms` }}
                       onClick={() => navigate(`/course/${course.id}`)}
                     >
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-foreground truncate">
-                          {course.title}
+                          {getDisplayTitle(course)}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           {course.completed_lessons} / {course.total_lessons} {t('course.lessons')}
@@ -227,7 +350,7 @@ const Dashboard: React.FC = () => {
                           <Progress value={progress} className="h-2" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 ml-4">
+                      <div className="flex items-center gap-2 ml-4">
                         <span className={`text-xs px-2 py-1 rounded-full ${
                           course.status === 'completed' 
                             ? 'bg-success/10 text-success' 
@@ -235,6 +358,14 @@ const Dashboard: React.FC = () => {
                         }`}>
                           {course.status === 'completed' ? t('course.completed') : t('course.inProgress')}
                         </span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={(e) => handleDeleteClick(e, course)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon">
                           <ArrowRight className="h-4 w-4" />
                         </Button>
@@ -247,6 +378,38 @@ const Dashboard: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce cours ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Le cours "{courseToDelete?.title}" et toutes ses leçons seront définitivement supprimés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
