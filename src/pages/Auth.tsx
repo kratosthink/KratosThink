@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { Lightbulb, Mail, Lock, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Email invalide');
@@ -18,8 +18,6 @@ const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(searchParams.get('mode') !== 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -47,15 +45,6 @@ const Auth: React.FC = () => {
       passwordSchema.parse(password);
     } catch {
       newErrors.password = 'Mot de passe trop court (min. 6 caractères)';
-    }
-
-    if (!isLogin) {
-      if (!fullName.trim()) {
-        newErrors.fullName = 'Nom requis';
-      }
-      if (password !== confirmPassword) {
-        newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
-      }
     }
 
     setErrors(newErrors);
@@ -87,7 +76,7 @@ const Auth: React.FC = () => {
           navigate('/dashboard');
         }
       } else {
-        const { error } = await signUp(email, password, fullName);
+        const { error } = await signUp(email, password, '');
         if (error) {
           const errorMessage = error.message.includes('already registered')
             ? 'Cet email est déjà utilisé'
@@ -116,10 +105,10 @@ const Auth: React.FC = () => {
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-              <BookOpen className="h-6 w-6 text-primary-foreground" />
+              <Lightbulb className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="font-display text-2xl font-semibold text-foreground">
-              LearnAI
+              Thoughts
             </span>
           </div>
         </div>
@@ -138,26 +127,6 @@ const Auth: React.FC = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">{t('auth.fullName')}</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10"
-                      placeholder="Jean Dupont"
-                    />
-                  </div>
-                  {errors.fullName && (
-                    <p className="text-sm text-destructive">{errors.fullName}</p>
-                  )}
-                </div>
-              )}
-
               <div className="space-y-2">
                 <Label htmlFor="email">{t('auth.email')}</Label>
                 <div className="relative">
@@ -193,26 +162,6 @@ const Auth: React.FC = () => {
                   <p className="text-sm text-destructive">{errors.password}</p>
                 )}
               </div>
-
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  {errors.confirmPassword && (
-                    <p className="text-sm text-destructive">{errors.confirmPassword}</p>
-                  )}
-                </div>
-              )}
 
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (

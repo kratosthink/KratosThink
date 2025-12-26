@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Navbar } from '@/components/layout/Navbar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,13 +15,17 @@ import {
   MessageSquare,
   Target,
   CheckCircle,
-  Loader2
+  Loader2,
+  Download,
+  PenTool
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LessonQuiz } from '@/components/lesson/LessonQuiz';
 import { LessonMindmap } from '@/components/lesson/LessonMindmap';
 import { LessonChat } from '@/components/lesson/LessonChat';
+import { LessonExercises } from '@/components/lesson/LessonExercises';
+import { exportLessonToPDF } from '@/utils/pdfExport';
 
 interface LessonData {
   id: string;
@@ -38,12 +42,13 @@ interface CourseInfo {
   id: string;
   title: string;
   total_lessons: number;
+  language: string | null;
 }
 
 const Lesson: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const { user, loading: authLoading } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [lesson, setLesson] = useState<LessonData | null>(null);
@@ -51,6 +56,11 @@ const Lesson: React.FC = () => {
   const [lessons, setLessons] = useState<{ id: string; order_index: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translatedContent, setTranslatedContent] = useState<{
+    title: string;
+    content: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -63,6 +73,18 @@ const Lesson: React.FC = () => {
       fetchLesson();
     }
   }, [user, lessonId]);
+
+  // Translate content when language changes
+  useEffect(() => {
+    if (lesson && course) {
+      const courseLanguage = course.language || 'fr';
+      if (language !== courseLanguage) {
+        translateContent();
+      } else {
+        setTranslatedContent(null);
+      }
+    }
+  }, [language, lesson, course]);
 
   const fetchLesson = async () => {
     try {
@@ -80,10 +102,9 @@ const Lesson: React.FC = () => {
 
       setLesson(lessonData);
 
-      // Fetch course info
       const { data: courseData } = await supabase
         .from('courses')
-        .select('id, title, total_lessons')
+        .select('id, title, total_lessons, language')
         .eq('id', lessonData.course_id)
         .maybeSingle();
 
@@ -91,7 +112,6 @@ const Lesson: React.FC = () => {
         setCourse(courseData);
       }
 
-      // Fetch all lessons for navigation
       const { data: allLessons } = await supabase
         .from('lessons')
         .select('id, order_index')
@@ -108,18 +128,45 @@ const Lesson: React.FC = () => {
     }
   };
 
+  const translateContent = async () => {
+    if (!lesson || translating) return;
+    
+    setTranslating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('translate-content', {
+        body: {
+          title: lesson.title,
+          content: lesson.content,
+          targetLanguage: language,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data?.title && data?.content) {
+        setTranslatedContent({
+          title: data.title,
+          content: data.content,
+        });
+      }
+    } catch (error) {
+      console.error('Translation error:', error);
+      // Silently fail - show original content
+    } finally {
+      setTranslating(false);
+    }
+  };
+
   const handleComplete = async () => {
     if (!lesson || !user) return;
 
     setCompleting(true);
     try {
-      // Update lesson
       await supabase
         .from('lessons')
         .update({ is_completed: true, points_earned: 10 })
         .eq('id', lesson.id);
 
-      // Update or create lesson progress
       await supabase
         .from('lesson_progress')
         .upsert({
@@ -130,7 +177,6 @@ const Lesson: React.FC = () => {
           completed_at: new Date().toISOString(),
         }, { onConflict: 'user_id,lesson_id' });
 
-      // Update course progress
       if (course) {
         const { data: completedLessons } = await supabase
           .from('lessons')
@@ -148,7 +194,6 @@ const Lesson: React.FC = () => {
           })
           .eq('id', course.id);
 
-        // Update profile points
         const { data: profile } = await supabase
           .from('profiles')
           .select('total_points')
@@ -175,9 +220,30 @@ const Lesson: React.FC = () => {
     }
   };
 
+  const handleExportPDF = () => {
+    if (!lesson || !course) return;
+    
+    exportLessonToPDF(
+      {
+        title: translatedContent?.title || lesson.title,
+        content: translatedContent?.content || lesson.content,
+        order_index: lesson.order_index,
+      },
+      course.title
+    );
+    
+    toast({
+      title: 'PDF exporté',
+      description: 'Le fichier a été téléchargé.',
+    });
+  };
+
   const currentIndex = lessons.findIndex(l => l.id === lessonId);
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
+
+  const displayTitle = translatedContent?.title || lesson?.title || '';
+  const displayContent = translatedContent?.content || lesson?.content || '';
 
   if (loading || authLoading) {
     return (
@@ -212,19 +278,31 @@ const Lesson: React.FC = () => {
 
         {/* Lesson Header */}
         <div className="mb-6 animate-fade-in">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-sm text-muted-foreground">
-              {t('course.lesson')} {lesson.order_index}
-            </span>
-            {lesson.is_completed && (
-              <span className="flex items-center gap-1 text-sm text-success">
-                <CheckCircle className="h-4 w-4" />
-                {t('course.completed')}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {t('course.lesson')} {lesson.order_index}
               </span>
-            )}
+              {lesson.is_completed && (
+                <span className="flex items-center gap-1 text-sm text-success">
+                  <CheckCircle className="h-4 w-4" />
+                  {t('course.completed')}
+                </span>
+              )}
+              {translating && (
+                <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Traduction...
+                </span>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportPDF}>
+              <Download className="h-4 w-4 mr-2" />
+              Export PDF
+            </Button>
           </div>
           <h1 className="font-display text-3xl font-bold text-foreground">
-            {lesson.title}
+            {displayTitle}
           </h1>
         </div>
 
@@ -239,6 +317,10 @@ const Lesson: React.FC = () => {
               <Target className="h-4 w-4" />
               {t('course.quiz')}
             </TabsTrigger>
+            <TabsTrigger value="exercises" className="gap-2">
+              <PenTool className="h-4 w-4" />
+              Exercices
+            </TabsTrigger>
             <TabsTrigger value="mindmap" className="gap-2">
               <Brain className="h-4 w-4" />
               {t('course.mindmap')}
@@ -252,15 +334,20 @@ const Lesson: React.FC = () => {
           <TabsContent value="content">
             <Card className="border-border/50">
               <CardContent className="pt-6 prose prose-slate dark:prose-invert max-w-none">
-                {lesson.content ? (
-                  <div dangerouslySetInnerHTML={{ __html: lesson.content.replace(/\n/g, '<br/>') }} />
+                {displayContent ? (
+                  <div className="space-y-4">
+                    {displayContent.split(/\n\n+/).map((paragraph, index) => (
+                      <p key={index} className="text-foreground leading-relaxed">
+                        {paragraph}
+                      </p>
+                    ))}
+                  </div>
                 ) : (
                   <p className="text-muted-foreground">Contenu de la leçon en cours de chargement...</p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Complete Button */}
             {!lesson.is_completed && (
               <div className="mt-6 text-center">
                 <Button 
@@ -287,6 +374,10 @@ const Lesson: React.FC = () => {
             />
           </TabsContent>
 
+          <TabsContent value="exercises">
+            <LessonExercises exercises={null} />
+          </TabsContent>
+
           <TabsContent value="mindmap">
             <LessonMindmap 
               mindmapData={lesson.mindmap_data} 
@@ -296,8 +387,8 @@ const Lesson: React.FC = () => {
           <TabsContent value="chat">
             <LessonChat 
               lessonId={lesson.id}
-              lessonTitle={lesson.title}
-              lessonContent={lesson.content || ''}
+              lessonTitle={displayTitle}
+              lessonContent={displayContent}
             />
           </TabsContent>
         </Tabs>
