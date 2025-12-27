@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,13 +7,16 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, Trophy, RotateCcw } from 'lucide-react';
+import { CheckCircle, XCircle, Trophy, RotateCcw, BookOpen, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface QuizQuestion {
   question: string;
   options: string[];
   correct: number;
+  explanation?: string;
+  context?: string;
+  date?: string;
 }
 
 interface LessonQuizProps {
@@ -31,12 +34,101 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [completed, setCompleted] = useState(false);
+  const [savedProgress, setSavedProgress] = useState<{
+    currentQuestion: number;
+    score: number;
+    answers: boolean[];
+  } | null>(null);
+
+  // Load saved progress on mount
+  useEffect(() => {
+    if (user && lessonId) {
+      loadProgress();
+    }
+  }, [user, lessonId]);
+
+  const loadProgress = async () => {
+    if (!user) return;
+    
+    try {
+      const { data } = await supabase
+        .from('lesson_progress')
+        .select('quiz_score, quiz_completed')
+        .eq('user_id', user.id)
+        .eq('lesson_id', lessonId)
+        .maybeSingle();
+
+      if (data && !data.quiz_completed && data.quiz_score !== null) {
+        // Resume from saved progress
+        const savedQuestion = Math.min(data.quiz_score, (quizData?.length || 1) - 1);
+        setSavedProgress({
+          currentQuestion: savedQuestion,
+          score: 0,
+          answers: []
+        });
+      }
+    } catch (error) {
+      console.error('Error loading quiz progress:', error);
+    }
+  };
+
+  const saveProgress = async (questionIndex: number, currentScore: number) => {
+    if (!user) return;
+    
+    try {
+      await supabase
+        .from('lesson_progress')
+        .upsert({
+          user_id: user.id,
+          lesson_id: lessonId,
+          quiz_score: questionIndex,
+          quiz_completed: false,
+        }, { onConflict: 'user_id,lesson_id' });
+    } catch (error) {
+      console.error('Error saving quiz progress:', error);
+    }
+  };
+
+  const handleResumeProgress = () => {
+    if (savedProgress) {
+      setCurrentQuestion(savedProgress.currentQuestion);
+      setSavedProgress(null);
+    }
+  };
+
+  const handleStartFresh = () => {
+    setSavedProgress(null);
+    setCurrentQuestion(0);
+  };
 
   if (!quizData || quizData.length === 0) {
     return (
       <Card className="border-border/50">
         <CardContent className="py-12 text-center">
           <p className="text-muted-foreground">Quiz non disponible pour cette leçon</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show resume dialog if there's saved progress
+  if (savedProgress && savedProgress.currentQuestion > 0) {
+    return (
+      <Card className="border-border/50">
+        <CardContent className="py-12 text-center space-y-6">
+          <BookOpen className="h-12 w-12 text-primary mx-auto" />
+          <h2 className="text-xl font-bold">Progression sauvegardée</h2>
+          <p className="text-muted-foreground">
+            Vous étiez à la question {savedProgress.currentQuestion + 1} sur {quizData.length}.
+          </p>
+          <div className="flex justify-center gap-4">
+            <Button onClick={handleResumeProgress}>
+              Reprendre
+            </Button>
+            <Button variant="outline" onClick={handleStartFresh}>
+              Recommencer
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -55,6 +147,9 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
       setScore(score + 1);
     }
     setAnswers([...answers, isCorrect]);
+    
+    // Save progress after each question
+    saveProgress(currentQuestion, score + (isCorrect ? 1 : 0));
   };
 
   const handleNext = async () => {
@@ -67,7 +162,7 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
       setCompleted(true);
       const finalScore = score + (selectedAnswer === question.correct ? 1 : 0);
       const percentage = (finalScore / quizData.length) * 100;
-      const bonusPoints = percentage === 100 ? 20 : Math.round(percentage / 10);
+      const bonusPoints = percentage === 100 ? 25 : Math.round(percentage / 5);
 
       if (user) {
         try {
@@ -123,8 +218,14 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
           <p className="text-4xl font-bold text-foreground mb-2">
             {finalScore} / {quizData.length}
           </p>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-4">
             {Math.round(percentage)}% correct
+          </p>
+          <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+            {percentage === 100 ? 'Parfait ! Vous maîtrisez parfaitement ce sujet.' :
+             percentage >= 80 ? 'Excellent ! Vous avez une très bonne compréhension.' :
+             percentage >= 60 ? 'Bien joué ! Quelques points à consolider.' :
+             'Continuez à étudier et réessayez.'}
           </p>
           <Button onClick={handleRetry} variant="outline">
             <RotateCcw className="h-4 w-4 mr-2" />
@@ -149,6 +250,21 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
         <Progress value={progress} className="h-2" />
       </CardHeader>
       <CardContent>
+        {/* Context/Date if available */}
+        {(question.context || question.date) && (
+          <div className="mb-4 p-3 bg-secondary/30 rounded-lg text-sm">
+            {question.date && (
+              <p className="flex items-center gap-2 text-muted-foreground mb-1">
+                <Calendar className="h-4 w-4" />
+                <strong>{question.date}</strong>
+              </p>
+            )}
+            {question.context && (
+              <p className="text-muted-foreground">{question.context}</p>
+            )}
+          </div>
+        )}
+
         <h3 className="font-medium text-lg mb-6">
           {question.question}
         </h3>
@@ -198,16 +314,25 @@ export const LessonQuiz: React.FC<LessonQuizProps> = ({ lessonId, quizData }) =>
           })}
         </RadioGroup>
 
+        {/* Explanation after answering */}
+        {showResult && question.explanation && (
+          <div className="mt-4 p-4 bg-secondary/30 rounded-lg border">
+            <p className="text-sm font-medium mb-1">Explication :</p>
+            <p className="text-sm text-muted-foreground">{question.explanation}</p>
+          </div>
+        )}
+
         <div className="flex justify-end mt-6 gap-3">
           {!showResult ? (
             <Button 
               onClick={handleSubmit}
               disabled={selectedAnswer === null}
+              size="lg"
             >
               {t('quiz.submit')}
             </Button>
           ) : (
-            <Button onClick={handleNext}>
+            <Button onClick={handleNext} size="lg">
               {currentQuestion < quizData.length - 1 ? t('quiz.next') : 'Voir résultats'}
             </Button>
           )}

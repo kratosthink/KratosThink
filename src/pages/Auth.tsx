@@ -108,7 +108,7 @@ const Auth: React.FC = () => {
               <Lightbulb className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="font-display text-2xl font-semibold text-foreground">
-              Thoughts
+              KratosThink
             </span>
           </div>
         </div>

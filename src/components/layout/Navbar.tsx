@@ -42,7 +42,7 @@ export const Navbar: React.FC = () => {
             <Lightbulb className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-xl font-semibold text-foreground tracking-tight">
-            Thoughts
+            KratosThink
           </span>
         </Link>
 
