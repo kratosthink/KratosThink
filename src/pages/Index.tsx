@@ -125,7 +125,7 @@ const Index: React.FC = () => {
       {/* Footer */}
       <footer className="border-t border-border/40 py-8">
         <div className="container text-center text-sm text-muted-foreground">
-          <p>© 2024 Thoughts. All rights reserved.</p>
+          <p>© 2025 KratosThink. All rights reserved.</p>
         </div>
       </footer>
     </div>
