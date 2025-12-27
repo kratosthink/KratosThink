@@ -17,6 +17,9 @@ const languageMap: Record<string, string> = {
   zh: '中文',
 };
 
+// Simple in-memory cache to speed up repeated translations
+const translationCache = new Map<string, { title: string; content: string }>();
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -29,6 +32,16 @@ serve(async (req) => {
       throw new Error('Missing required fields: title, content, targetLanguage');
     }
 
+    // Check cache first
+    const cacheKey = `${title.substring(0, 50)}_${targetLanguage}`;
+    const cached = translationCache.get(cacheKey);
+    if (cached) {
+      console.log('Returning cached translation');
+      return new Response(JSON.stringify(cached), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
@@ -37,19 +50,15 @@ serve(async (req) => {
     const targetLangName = languageMap[targetLanguage] || targetLanguage;
     console.log(`Translating to: ${targetLangName}`);
 
-    const prompt = `Traduis le contenu suivant en ${targetLangName}. Garde le même format et structure.
+    // Shorter, more efficient prompt
+    const prompt = `Translate to ${targetLangName}. Keep formatting intact.
 
-TITRE:
-${title}
+TITLE: ${title}
 
-CONTENU:
-${content}
+CONTENT: ${content.substring(0, 3000)}
 
-Réponds UNIQUEMENT en JSON valide avec cette structure:
-{
-  "title": "Titre traduit",
-  "content": "Contenu traduit avec les mêmes paragraphes"
-}`;
+JSON response only:
+{"title": "translated title", "content": "translated content"}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -58,11 +67,11 @@ Réponds UNIQUEMENT en JSON valide avec cette structure:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-flash-lite', // Use faster model
         messages: [
           { role: 'user', content: prompt }
         ],
-        temperature: 0.3,
+        temperature: 0.1, // Lower for faster, more consistent output
       }),
     });
 
@@ -88,6 +97,15 @@ Réponds UNIQUEMENT en JSON valide avec cette structure:
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
       throw new Error('Failed to parse translated content');
+    }
+
+    // Cache the result
+    translationCache.set(cacheKey, translatedData);
+    
+    // Limit cache size
+    if (translationCache.size > 100) {
+      const firstKey = translationCache.keys().next().value;
+      if (firstKey) translationCache.delete(firstKey);
     }
 
     console.log('Translation successful');

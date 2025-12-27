@@ -52,57 +52,76 @@ serve(async (req) => {
     const targetLanguage = languageMap[language] || 'Français';
     console.log(`Generating course for topic: ${topic}, language: ${targetLanguage}, user: ${user.id}`);
 
-    // Generate course structure with AI - Enhanced prompt for richer content
-    const prompt = `Tu es un expert pédagogue et créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
+    // Enhanced prompt for richer content with more dates, events, quizzes
+    const prompt = `Tu es un expert pédagogue et historien créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
 
 IMPORTANT: Tout le contenu DOIT être rédigé en ${targetLanguage}.
 
-Génère un cours avec 5 leçons. Pour chaque leçon, fournis:
+Génère un cours avec 6 leçons détaillées. Pour chaque leçon, fournis:
 
 1. Un titre clair et engageant (en ${targetLanguage})
 
-2. Un contenu TRÈS détaillé (500-700 mots minimum) structuré avec:
-   - Une introduction qui contextualise le sujet
-   - Plusieurs paragraphes bien séparés avec des sauts de ligne
-   - Des explications progressives du simple au complexe
-   - Des exemples concrets et pratiques
-   - Des analogies pour faciliter la compréhension
+2. Un contenu TRÈS détaillé (700-1000 mots) structuré avec:
+   - Une introduction qui contextualise le sujet avec une DATE HISTORIQUE importante si applicable
+   - Des ÉVÉNEMENTS CLÉS avec leurs DATES précises (jour/mois/année quand possible)
+   - Plusieurs paragraphes bien séparés avec des sauts de ligne (\\n\\n)
+   - Des personnages importants avec leurs dates de naissance/mort
+   - Des chiffres et statistiques pertinents
+   - Des exemples concrets et cas pratiques datés
+   - Une chronologie des événements majeurs
    - Une conclusion résumant les points clés
    
-   IMPORTANT: Utilise des doubles sauts de ligne (\\n\\n) entre les paragraphes pour une meilleure lisibilité.
+   IMPORTANT: Inclure AU MOINS 5 dates importantes par leçon si le sujet s'y prête.
 
-3. Un quiz de 5 questions variées:
-   - 2 questions de compréhension
-   - 2 questions d'application
-   - 1 question de réflexion/analyse
-   Format: QCM avec 4 options, indique l'index de la bonne réponse (0-3)
+3. Un quiz de 8 questions variées et approfondies:
+   - 2 questions sur les DATES et événements importants (ex: "En quelle année...?")
+   - 2 questions de compréhension conceptuelle
+   - 2 questions d'application pratique
+   - 2 questions d'analyse critique
+   
+   Chaque question doit avoir:
+   - La question clairement formulée
+   - 4 options dont une seule correcte
+   - Un contexte explicatif (optionnel mais recommandé)
+   - Une explication de la bonne réponse
+   - Une date associée si pertinent
+   
+   Format: QCM avec 4 options, indice correct (0-3)
 
-4. Une structure de mind map riche avec le concept central et 3-5 branches principales, chacune avec 2-3 sous-branches
+4. Une structure de mind map riche avec:
+   - Le concept central
+   - 4-6 branches principales avec dates si applicable
+   - 2-4 sous-branches par branche principale
+   - Des mots-clés précis et informatifs
 
 Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
 {
   "title": "Titre du cours en ${targetLanguage}",
-  "description": "Description engageante du cours (2-3 phrases) en ${targetLanguage}",
+  "description": "Description engageante du cours (3-4 phrases) mentionnant la période historique couverte si applicable",
   "lessons": [
     {
       "title": "Titre de la leçon en ${targetLanguage}",
-      "content": "Contenu détaillé avec paragraphes séparés par \\n\\n en ${targetLanguage}...",
+      "content": "Contenu très détaillé avec dates, événements, personnages, paragraphes séparés par \\n\\n...",
       "quiz": [
         {
           "question": "Question en ${targetLanguage} ?",
           "options": ["Option A", "Option B", "Option C", "Option D"],
-          "correct": 0
+          "correct": 0,
+          "context": "Contexte historique ou explicatif (optionnel)",
+          "date": "Date associée si pertinent (optionnel)",
+          "explanation": "Explication de la bonne réponse"
         }
       ],
       "mindmap": {
         "id": "root",
-        "label": "Concept principal en ${targetLanguage}",
+        "label": "Concept principal",
         "children": [
           {
             "id": "child1",
-            "label": "Branche 1",
+            "label": "Branche 1 (avec date si pertinent)",
             "children": [
-              { "id": "child1-1", "label": "Sous-concept", "children": [] }
+              { "id": "child1-1", "label": "Sous-concept détaillé", "children": [] },
+              { "id": "child1-2", "label": "Autre sous-concept", "children": [] }
             ]
           }
         ]

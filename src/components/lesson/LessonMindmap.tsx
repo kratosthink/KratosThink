@@ -2,15 +2,13 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, Edit2, Check, X, Brain, Move } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X, Brain, Move, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface MindmapNode {
   id: string;
   label: string;
   children?: MindmapNode[];
-  x?: number;
-  y?: number;
 }
 
 interface LessonMindmapProps {
@@ -33,7 +31,15 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  
+  // Pan and zoom state
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Initialize positions
   useEffect(() => {
@@ -42,9 +48,9 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     }
   }, [data]);
 
-  const initializePositions = (node: MindmapNode, level = 0, index = 0, parentPos?: NodePosition) => {
+  const initializePositions = (node: MindmapNode) => {
     const centerX = 400;
-    const centerY = 200;
+    const centerY = 250;
     
     const newPositions: Record<string, NodePosition> = {};
     
@@ -54,7 +60,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       } else {
         const angleStep = (2 * Math.PI) / total;
         const angle = angleStep * idx - Math.PI / 2;
-        const radius = 120 + lvl * 80;
+        const radius = 140 + lvl * 100;
         const baseX = pPos?.x || centerX;
         const baseY = pPos?.y || centerY;
         newPositions[n.id] = {
@@ -133,7 +139,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     const parentPos = nodePositions[addingToId];
     if (parentPos) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 100;
+      const radius = 120;
       setNodePositions(prev => ({
         ...prev,
         [newId]: {
@@ -172,8 +178,10 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     });
   };
 
-  const handleMouseDown = (e: React.MouseEvent, nodeId: string) => {
+  // Node dragging
+  const handleNodeMouseDown = (e: React.MouseEvent, nodeId: string) => {
     if (editingId || addingToId) return;
+    e.stopPropagation();
     
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     setDraggingId(nodeId);
@@ -183,33 +191,80 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     });
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
+  const handleNodeMouseMove = useCallback((e: MouseEvent) => {
     if (!draggingId || !containerRef.current) return;
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - containerRect.left - dragOffset.x;
-    const y = e.clientY - containerRect.top - dragOffset.y;
+    const x = (e.clientX - containerRect.left - pan.x) / zoom - dragOffset.x;
+    const y = (e.clientY - containerRect.top - pan.y) / zoom - dragOffset.y;
 
     setNodePositions(prev => ({
       ...prev,
       [draggingId]: { x, y }
     }));
-  }, [draggingId, dragOffset]);
+  }, [draggingId, dragOffset, pan, zoom]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleNodeMouseUp = useCallback(() => {
     setDraggingId(null);
   }, []);
 
+  // Canvas panning
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (e.target === containerRef.current || e.target === contentRef.current) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
+  };
+
+  const handleCanvasMouseMove = useCallback((e: MouseEvent) => {
+    if (isPanning) {
+      setPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+    }
+  }, [isPanning, panStart]);
+
+  const handleCanvasMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Zoom controls
+  const handleZoomIn = () => setZoom(z => Math.min(z + 0.2, 2));
+  const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.5));
+  const handleResetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // Wheel zoom
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(z => Math.min(Math.max(z + delta, 0.5), 2));
+  };
+
   useEffect(() => {
     if (draggingId) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handleNodeMouseMove);
+      window.addEventListener('mouseup', handleNodeMouseUp);
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('mousemove', handleNodeMouseMove);
+        window.removeEventListener('mouseup', handleNodeMouseUp);
       };
     }
-  }, [draggingId, handleMouseMove, handleMouseUp]);
+  }, [draggingId, handleNodeMouseMove, handleNodeMouseUp]);
+
+  useEffect(() => {
+    if (isPanning) {
+      window.addEventListener('mousemove', handleCanvasMouseMove);
+      window.addEventListener('mouseup', handleCanvasMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleCanvasMouseMove);
+        window.removeEventListener('mouseup', handleCanvasMouseUp);
+      };
+    }
+  }, [isPanning, handleCanvasMouseMove, handleCanvasMouseUp]);
 
   if (!data) {
     return (
@@ -256,157 +311,182 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   return (
     <Card className="border-border/50">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Brain className="h-5 w-5 text-muted-foreground" />
-          {t('course.mindmap')}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Brain className="h-5 w-5 text-muted-foreground" />
+            {t('course.mindmap')}
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut}>
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-12 text-center">{Math.round(zoom * 100)}%</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn}>
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleResetView}>
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground flex items-center gap-2">
           <Move className="h-4 w-4" />
-          Glissez les nœuds pour les déplacer. Survolez pour modifier.
+          Glissez le fond pour naviguer. Molette pour zoomer. Glissez les nœuds pour les déplacer.
         </p>
       </CardHeader>
       <CardContent className="py-4">
         <div 
           ref={containerRef}
           className="relative w-full h-[500px] overflow-hidden bg-secondary/20 rounded-lg"
-          style={{ cursor: draggingId ? 'grabbing' : 'default' }}
+          style={{ cursor: isPanning ? 'grabbing' : draggingId ? 'grabbing' : 'grab' }}
+          onMouseDown={handleCanvasMouseDown}
+          onWheel={handleWheel}
         >
-          {/* SVG for connections */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {connections.map(({ from, to }) => {
-              const fromPos = nodePositions[from];
-              const toPos = nodePositions[to];
-              if (!fromPos || !toPos) return null;
+          <div
+            ref={contentRef}
+            className="absolute inset-0"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: '0 0',
+            }}
+          >
+            {/* SVG for connections */}
+            <svg className="absolute inset-0 w-[200%] h-[200%] pointer-events-none" style={{ left: '-50%', top: '-50%' }}>
+              {connections.map(({ from, to }) => {
+                const fromPos = nodePositions[from];
+                const toPos = nodePositions[to];
+                if (!fromPos || !toPos) return null;
+                return (
+                  <line
+                    key={`${from}-${to}`}
+                    x1={fromPos.x + 400}
+                    y1={fromPos.y + 250}
+                    x2={toPos.x + 400}
+                    y2={toPos.y + 250}
+                    stroke="hsl(var(--border))"
+                    strokeWidth={2 / zoom}
+                  />
+                );
+              })}
+            </svg>
+
+            {/* Nodes */}
+            {allNodes.map(({ node, level }) => {
+              const pos = nodePositions[node.id];
+              if (!pos) return null;
+              
+              const isEditing = editingId === node.id;
+              const isAdding = addingToId === node.id;
+              const isRoot = level === 0;
+              const colorClass = levelColors[Math.min(level, levelColors.length - 1)];
+
               return (
-                <line
-                  key={`${from}-${to}`}
-                  x1={fromPos.x}
-                  y1={fromPos.y}
-                  x2={toPos.x}
-                  y2={toPos.y}
-                  stroke="hsl(var(--border))"
-                  strokeWidth="2"
-                />
-              );
-            })}
-          </svg>
-
-          {/* Nodes */}
-          {allNodes.map(({ node, level }) => {
-            const pos = nodePositions[node.id];
-            if (!pos) return null;
-            
-            const isEditing = editingId === node.id;
-            const isAdding = addingToId === node.id;
-            const isRoot = level === 0;
-            const colorClass = levelColors[Math.min(level, levelColors.length - 1)];
-
-            return (
-              <div
-                key={node.id}
-                className="absolute group"
-                style={{
-                  left: pos.x,
-                  top: pos.y,
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: draggingId === node.id ? 100 : 10,
-                }}
-              >
                 <div
-                  className={`
-                    relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm 
-                    ${colorClass} ${isRoot ? 'text-base px-6 py-3 shadow-lg' : 'shadow-md'}
-                    transition-shadow duration-200 hover:shadow-lg
-                    ${draggingId === node.id ? 'ring-2 ring-primary' : ''}
-                  `}
-                  style={{ cursor: isEditing ? 'default' : 'grab' }}
-                  onMouseDown={(e) => handleMouseDown(e, node.id)}
+                  key={node.id}
+                  className="absolute group"
+                  style={{
+                    left: pos.x,
+                    top: pos.y,
+                    transform: 'translate(-50%, -50%)',
+                    zIndex: draggingId === node.id ? 100 : 10,
+                  }}
                 >
-                  {isEditing ? (
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      <Input
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="h-7 w-32 text-sm bg-background text-foreground"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveEdit();
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      />
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveEdit}>
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelEdit}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="whitespace-nowrap">{node.label}</span>
-                      <div className="hidden group-hover:flex items-center gap-1 ml-2">
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-6 w-6 opacity-70 hover:opacity-100"
-                          onClick={(e) => { e.stopPropagation(); handleEdit(node.id, node.label); }}
+                  <div
+                    className={`
+                      relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm 
+                      ${colorClass} ${isRoot ? 'text-base px-6 py-3 shadow-lg' : 'shadow-md'}
+                      transition-shadow duration-200 hover:shadow-lg
+                      ${draggingId === node.id ? 'ring-2 ring-primary' : ''}
+                    `}
+                    style={{ cursor: isEditing ? 'default' : 'grab' }}
+                    onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="h-7 w-32 text-sm bg-background text-foreground"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEdit();
+                            if (e.key === 'Escape') handleCancelEdit();
+                          }}
                           onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <Edit2 className="h-3 w-3" />
+                        />
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveEdit}>
+                          <Check className="h-3 w-3" />
                         </Button>
-                        <Button 
-                          size="icon" 
-                          variant="ghost" 
-                          className="h-6 w-6 opacity-70 hover:opacity-100"
-                          onClick={(e) => { e.stopPropagation(); handleAddChild(node.id); }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        >
-                          <Plus className="h-3 w-3" />
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelEdit}>
+                          <X className="h-3 w-3" />
                         </Button>
-                        {!isRoot && (
+                      </div>
+                    ) : (
+                      <>
+                        <span className="whitespace-nowrap">{node.label}</span>
+                        <div className="hidden group-hover:flex items-center gap-1 ml-2">
                           <Button 
                             size="icon" 
                             variant="ghost" 
-                            className="h-6 w-6 opacity-70 hover:opacity-100 text-destructive"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(node.id); }}
+                            className="h-6 w-6 opacity-70 hover:opacity-100"
+                            onClick={(e) => { e.stopPropagation(); handleEdit(node.id, node.label); }}
                             onMouseDown={(e) => e.stopPropagation()}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Edit2 className="h-3 w-3" />
                           </Button>
-                        )}
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-6 w-6 opacity-70 hover:opacity-100"
+                            onClick={(e) => { e.stopPropagation(); handleAddChild(node.id); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                          {!isRoot && (
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-6 w-6 opacity-70 hover:opacity-100 text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(node.id); }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Add new node form */}
+                  {isAdding && (
+                    <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-50">
+                      <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-lg">
+                        <Input
+                          value={newNodeLabel}
+                          onChange={(e) => setNewNodeLabel(e.target.value)}
+                          placeholder="Nouveau concept..."
+                          className="h-8 text-sm w-32"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveNewChild();
+                            if (e.key === 'Escape') handleCancelAdd();
+                          }}
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
+                          <Check className="h-3 w-3" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
+                          <X className="h-3 w-3" />
+                        </Button>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
-
-                {/* Add new node form */}
-                {isAdding && (
-                  <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-50">
-                    <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-lg">
-                      <Input
-                        value={newNodeLabel}
-                        onChange={(e) => setNewNodeLabel(e.target.value)}
-                        placeholder="Nouveau concept..."
-                        className="h-8 text-sm w-32"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveNewChild();
-                          if (e.key === 'Escape') handleCancelAdd();
-                        }}
-                      />
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </CardContent>
     </Card>
