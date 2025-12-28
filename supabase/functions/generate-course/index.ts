@@ -53,7 +53,7 @@ serve(async (req) => {
     console.log(`Generating course for topic: ${topic}, language: ${targetLanguage}, user: ${user.id}`);
 
     // Enhanced prompt for richer content with more dates, events, quizzes
-    const prompt = `Tu es un expert pédagogue et historien créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
+    const prompt = `Tu es un expert pédagogue et historien/économiste/politicien/businessman de droite créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
 
 IMPORTANT: Tout le contenu DOIT être rédigé en ${targetLanguage}.
 
