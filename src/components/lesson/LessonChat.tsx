@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Bot, User } from 'lucide-react';
+import { Send, Loader2, Bot, User, Maximize2, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
@@ -33,6 +33,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
   const [loading, setLoading] = useState(false);
   const [displayedContent, setDisplayedContent] = useState('');
   const [isTypingEffect, setIsTypingEffect] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -42,10 +43,9 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     }
   }, [user, lessonId]);
 
+  // Auto-scroll when messages change or during typing
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    scrollToBottom();
   }, [messages, displayedContent]);
 
   // Cleanup typing effect on unmount
@@ -56,6 +56,15 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       }
     };
   }, []);
+
+  const scrollToBottom = () => {
+    if (scrollRef.current) {
+      const scrollElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollElement) {
+        scrollElement.scrollTop = scrollElement.scrollHeight;
+      }
+    }
+  };
 
   const fetchMessages = async () => {
     const { data } = await supabase
@@ -79,7 +88,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     setIsTypingEffect(true);
     setDisplayedContent('');
 
-  // Fast typing speed
+    // Fast typing speed
     const getTypingDelay = () => {
       const base = 5;
       const variation = Math.random() * 10;
@@ -93,6 +102,8 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       if (currentIndex < fullContent.length) {
         currentIndex++;
         setDisplayedContent(fullContent.substring(0, currentIndex));
+        // Auto-scroll during typing
+        scrollToBottom();
         typingIntervalRef.current = setTimeout(typeNextChar, getTypingDelay());
       } else {
         setIsTypingEffect(false);
@@ -170,13 +181,22 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     }
   };
 
-  return (
-    <Card className="border-border/50 flex flex-col h-[500px]">
+  const chatContent = (
+    <>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Bot className="h-5 w-5 text-muted-foreground" />
-          {t('course.chat')} - {lessonTitle}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Bot className="h-5 w-5 text-muted-foreground" />
+            {t('course.chat')} - {lessonTitle}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+          >
+            {isFullscreen ? <X className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col overflow-hidden pb-4">
         <ScrollArea ref={scrollRef} className="flex-1 pr-4">
@@ -251,6 +271,22 @@ export const LessonChat: React.FC<LessonChatProps> = ({
           </Button>
         </div>
       </CardContent>
+    </>
+  );
+
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <Card className="border-0 rounded-none flex-1 flex flex-col h-full">
+          {chatContent}
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="border-border/50 flex flex-col h-[500px]">
+      {chatContent}
     </Card>
   );
 };

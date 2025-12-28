@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, Edit2, Check, X, Brain, Move, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Check, X as XIcon, Brain, Move, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useLanguage } from '@/i18n/LanguageContext';
 
 interface MindmapNode {
@@ -31,6 +31,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   const [nodePositions, setNodePositions] = useState<Record<string, NodePosition>>({});
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Pan and zoom state
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -271,7 +272,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       <Card className="border-border/50">
         <CardContent className="py-12 text-center">
           <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">{t('course.mindmap')} non disponible</p>
+          <p className="text-muted-foreground">{t('mindmap.notAvailable')}</p>
         </CardContent>
       </Card>
     );
@@ -308,8 +309,8 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     'bg-card text-card-foreground border border-border/50',
   ];
 
-  return (
-    <Card className="border-border/50">
+  const mindmapContent = (
+    <>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
@@ -327,17 +328,25 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleResetView}>
               <Maximize2 className="h-4 w-4" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+            >
+              {isFullscreen ? <XIcon className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
           </div>
         </div>
         <p className="text-sm text-muted-foreground flex items-center gap-2">
           <Move className="h-4 w-4" />
-          Glissez le fond pour naviguer. Molette pour zoomer. Glissez les nœuds pour les déplacer.
+          {t('mindmap.instructions')}
         </p>
       </CardHeader>
-      <CardContent className="py-4">
+      <CardContent className="py-4 flex-1">
         <div 
           ref={containerRef}
-          className="relative w-full h-[500px] overflow-hidden bg-secondary/20 rounded-lg"
+          className={`relative w-full overflow-hidden bg-secondary/20 rounded-lg ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[500px]'}`}
           style={{ cursor: isPanning ? 'grabbing' : draggingId ? 'grabbing' : 'grab' }}
           onMouseDown={handleCanvasMouseDown}
           onWheel={handleWheel}
@@ -418,7 +427,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                           <Check className="h-3 w-3" />
                         </Button>
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelEdit}>
-                          <X className="h-3 w-3" />
+                          <XIcon className="h-3 w-3" />
                         </Button>
                       </div>
                     ) : (
@@ -466,7 +475,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                         <Input
                           value={newNodeLabel}
                           onChange={(e) => setNewNodeLabel(e.target.value)}
-                          placeholder="Nouveau concept..."
+                          placeholder={t('mindmap.newConcept')}
                           className="h-8 text-sm w-32"
                           autoFocus
                           onKeyDown={(e) => {
@@ -478,7 +487,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                           <Check className="h-3 w-3" />
                         </Button>
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
-                          <X className="h-3 w-3" />
+                          <XIcon className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
@@ -489,6 +498,22 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
           </div>
         </div>
       </CardContent>
+    </>
+  );
+
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <Card className="border-0 rounded-none flex-1 flex flex-col h-full overflow-hidden">
+          {mindmapContent}
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <Card className="border-border/50">
+      {mindmapContent}
     </Card>
   );
 };
