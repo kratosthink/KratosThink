@@ -311,7 +311,7 @@ const Lesson: React.FC = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="content" className="gap-2">
               <BookOpen className="h-4 w-4" />
-              Contenu
+              {t('lesson.content')}
             </TabsTrigger>
             <TabsTrigger value="quiz" className="gap-2">
               <Target className="h-4 w-4" />
@@ -319,7 +319,7 @@ const Lesson: React.FC = () => {
             </TabsTrigger>
             <TabsTrigger value="exercises" className="gap-2">
               <PenTool className="h-4 w-4" />
-              Exercices
+              {t('lesson.exercises')}
             </TabsTrigger>
             <TabsTrigger value="mindmap" className="gap-2">
               <Brain className="h-4 w-4" />
@@ -361,7 +361,7 @@ const Lesson: React.FC = () => {
                   ) : (
                     <CheckCircle className="h-4 w-4 mr-2" />
                   )}
-                  Marquer comme terminé
+                  {t('lesson.markComplete')}
                 </Button>
               </div>
             )}

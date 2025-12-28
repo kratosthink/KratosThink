@@ -305,7 +305,7 @@ const Dashboard: React.FC = () => {
             </CardTitle>
             <Button onClick={() => navigate('/')} variant="outline" size="sm">
               <Plus className="h-4 w-4 mr-2" />
-              Nouveau cours
+              {t('dashboard.newCourse')}
             </Button>
           </CardHeader>
           <CardContent>
