@@ -186,6 +186,52 @@ export const translations = {
     'course.scheduleRevision': 'Planifier révision',
     'course.completeAllForRevision': 'Terminez toutes les leçons pour activer la révision espacée',
     'common.saving': 'Enregistrement...',
+    'common.continue': 'Continuer',
+    
+    // Exercises
+    'exercises.notAvailable': 'Exercices non disponibles',
+    'exercises.question1': 'Quels sont les concepts clés présentés dans cette leçon ? Expliquez avec vos propres mots.',
+    'exercises.question2': 'Comment pourriez-vous appliquer ces connaissances dans une situation réelle ?',
+    'exercises.question3': 'Quelles sont les dates, événements ou faits les plus importants mentionnés ?',
+    'exercises.hint1': 'Réfléchissez aux sujets principaux et leur importance.',
+    'exercises.hint2': 'Considérez des exemples pratiques et cas d\'utilisation.',
+    'exercises.hint3': 'Passez en revue les informations chronologiques présentées.',
+    
+    // Badges
+    'badges.earned': 'Badge Gagné !',
+    'badges.congratulations': 'Félicitations !',
+    'badges.youEarned': 'Vous avez gagné un badge',
+    'badges.forCompleting': 'Pour avoir terminé',
+    'badges.lessonComplete': 'Leçon Terminée',
+    'badges.lessonCompleteDesc': 'Vous avez terminé une leçon avec succès',
+    
+    // Rewards
+    'rewards.nightMusic': 'Musique de Nuit',
+    'rewards.nightMusicDesc': 'Débloquez une musique de fond relaxante pour le mode nuit',
+    'rewards.premiumThemes': 'Thèmes Premium',
+    'rewards.premiumThemesDesc': 'Débloquez des thèmes de couleur exclusifs',
+    'rewards.specialBadges': 'Badges Spéciaux',
+    'rewards.specialBadgesDesc': 'Accès à une collection de badges exclusifs',
+    'rewards.allUnlocked': 'Toutes les récompenses débloquées !',
+    'rewards.congrats': 'Félicitations pour votre accomplissement !',
+    'rewards.nextReward': 'Prochaine Récompense',
+    
+    // Dashboard stats
+    'dashboard.myStats': 'Mes Stats',
+    'dashboard.leaderboard': 'Classement',
+    'dashboard.weeklyRanking': 'Classement Hebdomadaire',
+    'dashboard.thisWeek': 'Cette Semaine',
+    'dashboard.rank': 'Rang',
+    'dashboard.noStats': 'Pas encore de statistiques',
+    'dashboard.upcomingRevisions': 'Révisions à Venir',
+    'dashboard.today': "Aujourd'hui",
+    'dashboard.tomorrow': 'Demain',
+    
+    // Night mode
+    'night.unlocked': 'Musique de nuit débloquée !',
+    'night.unlockedDesc': 'Vous avez atteint 100 points ! Activez la musique relaxante.',
+    'night.playMusic': 'Jouer la musique',
+    'night.stopMusic': 'Arrêter la musique',
   },
   en: {
     'nav.home': 'Home',
@@ -335,6 +381,52 @@ export const translations = {
     'course.scheduleRevision': 'Schedule Revision',
     'course.completeAllForRevision': 'Complete all lessons to enable spaced repetition',
     'common.saving': 'Saving...',
+    'common.continue': 'Continue',
+    
+    // Exercises
+    'exercises.notAvailable': 'Exercises not available',
+    'exercises.question1': 'What are the key concepts presented in this lesson? Explain in your own words.',
+    'exercises.question2': 'How would you apply this knowledge in a real-world situation?',
+    'exercises.question3': 'What are the most important dates, events, or facts mentioned?',
+    'exercises.hint1': 'Think about the main topics and their importance.',
+    'exercises.hint2': 'Consider practical examples and use cases.',
+    'exercises.hint3': 'Review the chronological information presented.',
+    
+    // Badges
+    'badges.earned': 'Badge Earned!',
+    'badges.congratulations': 'Congratulations!',
+    'badges.youEarned': 'You earned a badge',
+    'badges.forCompleting': 'For completing',
+    'badges.lessonComplete': 'Lesson Complete',
+    'badges.lessonCompleteDesc': 'You successfully completed a lesson',
+    
+    // Rewards
+    'rewards.nightMusic': 'Night Music',
+    'rewards.nightMusicDesc': 'Unlock relaxing background music for night mode',
+    'rewards.premiumThemes': 'Premium Themes',
+    'rewards.premiumThemesDesc': 'Unlock exclusive color themes',
+    'rewards.specialBadges': 'Special Badges',
+    'rewards.specialBadgesDesc': 'Access to exclusive badge collection',
+    'rewards.allUnlocked': 'All rewards unlocked!',
+    'rewards.congrats': 'Congratulations on your achievement!',
+    'rewards.nextReward': 'Next Reward',
+    
+    // Dashboard stats
+    'dashboard.myStats': 'My Stats',
+    'dashboard.leaderboard': 'Leaderboard',
+    'dashboard.weeklyRanking': 'Weekly Ranking',
+    'dashboard.thisWeek': 'This Week',
+    'dashboard.rank': 'Rank',
+    'dashboard.noStats': 'No statistics yet',
+    'dashboard.upcomingRevisions': 'Upcoming Revisions',
+    'dashboard.today': 'Today',
+    'dashboard.tomorrow': 'Tomorrow',
+    
+    // Night mode
+    'night.unlocked': 'Night music unlocked!',
+    'night.unlockedDesc': 'You reached 100 points! Enable the relaxing music.',
+    'night.playMusic': 'Play music',
+    'night.stopMusic': 'Stop music',
   },
   it: {
     'nav.home': 'Home',

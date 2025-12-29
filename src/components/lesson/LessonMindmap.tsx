@@ -354,11 +354,10 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     }
   };
 
-  // Wheel zoom
+  // Disable wheel zoom - only use buttons
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(z => Math.min(Math.max(z + delta, 0.3), 2));
+    // Scroll zoom is disabled - use buttons instead
+    // Don't call e.preventDefault() to allow panning behavior
   };
 
   useEffect(() => {
@@ -524,7 +523,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
         </div>
         <p className="text-sm text-muted-foreground flex items-center gap-2">
           <Move className="h-4 w-4" />
-          {t('mindmap.instructions')}
+          {t('mindmap.instructions')} (Use buttons to zoom)
         </p>
       </CardHeader>
       <CardContent className="py-4 flex-1">
