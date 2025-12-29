@@ -17,14 +17,12 @@ import {
   CheckCircle,
   Loader2,
   Download,
-  PenTool
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LessonQuiz } from '@/components/lesson/LessonQuiz';
 import { LessonMindmap } from '@/components/lesson/LessonMindmap';
 import { LessonChat } from '@/components/lesson/LessonChat';
-import { LessonExercises } from '@/components/lesson/LessonExercises';
 import { exportLessonToPDF } from '@/utils/pdfExport';
 
 interface LessonData {
@@ -317,10 +315,6 @@ const Lesson: React.FC = () => {
               <Target className="h-4 w-4" />
               {t('course.quiz')}
             </TabsTrigger>
-            <TabsTrigger value="exercises" className="gap-2">
-              <PenTool className="h-4 w-4" />
-              {t('lesson.exercises')}
-            </TabsTrigger>
             <TabsTrigger value="mindmap" className="gap-2">
               <Brain className="h-4 w-4" />
               {t('course.mindmap')}
@@ -374,9 +368,6 @@ const Lesson: React.FC = () => {
             />
           </TabsContent>
 
-          <TabsContent value="exercises">
-            <LessonExercises exercises={null} />
-          </TabsContent>
 
           <TabsContent value="mindmap">
             <LessonMindmap 
