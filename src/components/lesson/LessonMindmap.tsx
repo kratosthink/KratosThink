@@ -51,33 +51,53 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
   const initializePositions = (node: MindmapNode) => {
     const centerX = 400;
-    const centerY = 250;
+    const centerY = 300;
     
     const newPositions: Record<string, NodePosition> = {};
     
-    const calculatePos = (n: MindmapNode, lvl: number, idx: number, total: number, pPos?: NodePosition): void => {
-      if (lvl === 0) {
+    // Collect all children at each level with their parent angle
+    const calculatePositions = (
+      n: MindmapNode, 
+      level: number, 
+      parentAngle: number, 
+      angleSpread: number,
+      parentPos: NodePosition
+    ): void => {
+      if (level === 0) {
         newPositions[n.id] = { x: centerX, y: centerY };
+        
+        if (n.children && n.children.length > 0) {
+          const childCount = n.children.length;
+          const fullAngle = 2 * Math.PI;
+          const anglePerChild = fullAngle / childCount;
+          
+          n.children.forEach((child, idx) => {
+            const childAngle = anglePerChild * idx - Math.PI / 2;
+            calculatePositions(child, 1, childAngle, anglePerChild * 0.8, newPositions[n.id]);
+          });
+        }
       } else {
-        const angleStep = (2 * Math.PI) / total;
-        const angle = angleStep * idx - Math.PI / 2;
-        const radius = 140 + lvl * 100;
-        const baseX = pPos?.x || centerX;
-        const baseY = pPos?.y || centerY;
-        newPositions[n.id] = {
-          x: baseX + Math.cos(angle) * radius,
-          y: baseY + Math.sin(angle) * radius,
-        };
-      }
-      
-      if (n.children && n.children.length > 0) {
-        n.children.forEach((child, i) => {
-          calculatePos(child, lvl + 1, i, n.children!.length, newPositions[n.id]);
-        });
+        // Calculate position based on parent angle - spread children around parent's direction
+        const radius = 120 + level * 80;
+        const x = parentPos.x + Math.cos(parentAngle) * radius;
+        const y = parentPos.y + Math.sin(parentAngle) * radius;
+        newPositions[n.id] = { x, y };
+        
+        if (n.children && n.children.length > 0) {
+          const childCount = n.children.length;
+          const spreadAngle = Math.min(angleSpread, Math.PI * 0.6);
+          const startAngle = parentAngle - spreadAngle / 2;
+          const angleStep = childCount > 1 ? spreadAngle / (childCount - 1) : 0;
+          
+          n.children.forEach((child, idx) => {
+            const childAngle = childCount === 1 ? parentAngle : startAngle + angleStep * idx;
+            calculatePositions(child, level + 1, childAngle, spreadAngle * 0.7, newPositions[n.id]);
+          });
+        }
       }
     };
     
-    calculatePos(node, 0, 0, 1);
+    calculatePositions(node, 0, 0, Math.PI * 2, { x: centerX, y: centerY });
     setNodePositions(newPositions);
   };
 
@@ -359,21 +379,46 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
               transformOrigin: '0 0',
             }}
           >
-            {/* SVG for connections */}
-            <svg className="absolute inset-0 w-[200%] h-[200%] pointer-events-none" style={{ left: '-50%', top: '-50%' }}>
+            {/* SVG for connections - curved bezier lines */}
+            <svg className="absolute inset-0 w-[300%] h-[300%] pointer-events-none" style={{ left: '-100%', top: '-100%' }}>
+              <defs>
+                <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+                  <polygon points="0 0, 6 2, 0 4" fill="hsl(var(--primary))" opacity="0.6" />
+                </marker>
+              </defs>
               {connections.map(({ from, to }) => {
                 const fromPos = nodePositions[from];
                 const toPos = nodePositions[to];
                 if (!fromPos || !toPos) return null;
+                
+                // Offset for the SVG positioning
+                const offsetX = 600;
+                const offsetY = 450;
+                
+                const x1 = fromPos.x + offsetX;
+                const y1 = fromPos.y + offsetY;
+                const x2 = toPos.x + offsetX;
+                const y2 = toPos.y + offsetY;
+                
+                // Calculate control points for bezier curve
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const curveStrength = Math.min(dist * 0.3, 50);
+                
+                // Control point perpendicular to line
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                
                 return (
-                  <line
+                  <path
                     key={`${from}-${to}`}
-                    x1={fromPos.x + 400}
-                    y1={fromPos.y + 250}
-                    x2={toPos.x + 400}
-                    y2={toPos.y + 250}
-                    stroke="hsl(var(--border))"
+                    d={`M ${x1} ${y1} Q ${midX} ${midY - curveStrength * 0.2} ${x2} ${y2}`}
+                    fill="none"
+                    stroke="hsl(var(--primary))"
                     strokeWidth={2 / zoom}
+                    strokeOpacity={0.5}
+                    markerEnd="url(#arrowhead)"
                   />
                 );
               })}
