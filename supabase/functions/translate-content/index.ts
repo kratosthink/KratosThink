@@ -88,7 +88,19 @@ Respond with valid JSON only:
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('AI Gateway error:', aiResponse.status, errorText);
-      throw new Error('Translation failed');
+      
+      if (aiResponse.status === 429) {
+        // Return original content on rate limit instead of failing
+        console.log('Rate limited, returning original content');
+        return new Response(JSON.stringify({ title, content }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // For other errors, return original content
+      return new Response(JSON.stringify({ title, content }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const aiData = await aiResponse.json();

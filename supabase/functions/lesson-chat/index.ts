@@ -62,8 +62,11 @@ Instructions:
       console.error('AI Gateway error:', aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: 'Limite de requêtes atteinte.' }), {
-          status: 429,
+        return new Response(JSON.stringify({ 
+          response: 'Le service est temporairement surchargé. Veuillez réessayer dans quelques secondes.',
+          error: 'rate_limited'
+        }), {
+          status: 200, // Return 200 with message instead of error
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }

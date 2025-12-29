@@ -23,6 +23,9 @@ interface NodePosition {
   height: number;
 }
 
+const CANVAS_WIDTH = 2000;
+const CANVAS_HEIGHT = 1600;
+
 export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpdate }) => {
   const { t } = useLanguage();
   const [data, setData] = useState<MindmapNode | null>(mindmapData);
@@ -45,7 +48,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   const contentRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Initialize positions with radial layout
+  // Initialize positions with hierarchical tree layout
   useEffect(() => {
     if (data && Object.keys(nodePositions).length === 0) {
       initializePositions(data);
@@ -77,73 +80,91 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       }
     };
     
-    // Delay to allow rendering
     const timer = setTimeout(updateDimensions, 100);
     return () => clearTimeout(timer);
   }, [data, nodePositions]);
 
   const initializePositions = (node: MindmapNode) => {
-    const centerX = 500;
-    const centerY = 400;
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
     
     const newPositions: Record<string, NodePosition> = {};
     
-    // Collect all nodes with their level
-    const collectNodes = (n: MindmapNode, level: number, parentId: string | null): Array<{node: MindmapNode, level: number, parentId: string | null}> => {
-      const result = [{node: n, level, parentId}];
+    // Place root node at center
+    newPositions[node.id] = { x: centerX, y: centerY, width: 180, height: 60 };
+    
+    // Count total nodes at each level for spacing
+    const countNodesAtLevel = (n: MindmapNode, level: number): Record<number, number> => {
+      const counts: Record<number, number> = { [level]: 1 };
       if (n.children) {
         n.children.forEach(child => {
-          result.push(...collectNodes(child, level + 1, n.id));
+          const childCounts = countNodesAtLevel(child, level + 1);
+          Object.entries(childCounts).forEach(([lvl, count]) => {
+            counts[parseInt(lvl)] = (counts[parseInt(lvl)] || 0) + count;
+          });
         });
       }
-      return result;
+      return counts;
     };
 
-    const allNodes = collectNodes(node, 0, null);
-    
-    // Position root at center
-    newPositions[node.id] = { x: centerX, y: centerY, width: 150, height: 50 };
-    
-    // Group children by parent
-    const nodesByParent: Record<string, MindmapNode[]> = {};
-    allNodes.forEach(({node: n, parentId}) => {
-      if (parentId) {
-        if (!nodesByParent[parentId]) nodesByParent[parentId] = [];
-        nodesByParent[parentId].push(n);
-      }
-    });
-
-    // Calculate positions level by level using radial layout with more spacing
-    const positionChildren = (parentId: string, parentPos: NodePosition, level: number, angleStart: number, angleEnd: number) => {
-      const children = nodesByParent[parentId] || [];
-      if (children.length === 0) return;
+    // Position children in a tree structure radiating outward
+    const positionSubtree = (
+      parentNode: MindmapNode,
+      parentX: number,
+      parentY: number,
+      level: number,
+      startAngle: number,
+      endAngle: number
+    ) => {
+      if (!parentNode.children || parentNode.children.length === 0) return;
       
-      // Increase spacing between levels - 250px between each level
-      const radius = 220 + level * 80;
-      const angleRange = angleEnd - angleStart;
-      const angleStep = children.length > 1 ? angleRange / children.length : 0;
+      const children = parentNode.children;
+      const angleSpan = endAngle - startAngle;
+      const angleStep = angleSpan / (children.length + 1);
       
-      children.forEach((child, idx) => {
-        const angle = children.length === 1 
-          ? (angleStart + angleEnd) / 2 
-          : angleStart + angleStep * (idx + 0.5);
+      // Radius increases with level
+      const radius = 200 + level * 120;
+      
+      children.forEach((child, index) => {
+        const angle = startAngle + angleStep * (index + 1);
+        const x = parentX + Math.cos(angle) * radius;
+        const y = parentY + Math.sin(angle) * radius;
         
-        const x = parentPos.x + Math.cos(angle) * radius;
-        const y = parentPos.y + Math.sin(angle) * radius;
-        
-        newPositions[child.id] = { x, y, width: 120, height: 40 };
+        newPositions[child.id] = { 
+          x, 
+          y, 
+          width: level === 1 ? 160 : 140, 
+          height: level === 1 ? 50 : 40 
+        };
         
         // Recursively position grandchildren in a narrower arc
-        const childAngleSpread = Math.PI / (2 + level);
-        positionChildren(child.id, { x, y, width: 120, height: 40 }, level + 1, angle - childAngleSpread / 2, angle + childAngleSpread / 2);
+        const childAngleSpread = Math.PI / (3 + level);
+        positionSubtree(
+          child, 
+          x, 
+          y, 
+          level + 1, 
+          angle - childAngleSpread / 2, 
+          angle + childAngleSpread / 2
+        );
       });
     };
     
+    // Start positioning from root
     if (node.children && node.children.length > 0) {
-      positionChildren(node.id, { x: centerX, y: centerY, width: 150, height: 50 }, 1, 0, 2 * Math.PI);
+      positionSubtree(node, centerX, centerY, 1, 0, 2 * Math.PI);
     }
     
     setNodePositions(newPositions);
+    
+    // Center view on the mindmap
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setPan({
+        x: rect.width / 2 - centerX * zoom,
+        y: rect.height / 2 - centerY * zoom
+      });
+    }
   };
 
   const updateData = useCallback((newData: MindmapNode) => {
@@ -204,14 +225,16 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
     const parentPos = nodePositions[addingToId];
     if (parentPos) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 220;
+      // Position new node relative to parent
+      const siblings = getSiblingCount(data, addingToId);
+      const angle = Math.PI / 4 + (siblings * Math.PI / 6);
+      const radius = 180;
       setNodePositions(prev => ({
         ...prev,
         [newId]: {
           x: parentPos.x + Math.cos(angle) * radius,
           y: parentPos.y + Math.sin(angle) * radius,
-          width: 120,
+          width: 140,
           height: 40,
         }
       }));
@@ -227,6 +250,19 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     setNewNodeLabel('');
   };
 
+  const getSiblingCount = (node: MindmapNode, parentId: string): number => {
+    if (node.id === parentId) {
+      return node.children?.length || 0;
+    }
+    if (node.children) {
+      for (const child of node.children) {
+        const count = getSiblingCount(child, parentId);
+        if (count >= 0) return count;
+      }
+    }
+    return 0;
+  };
+
   const handleCancelAdd = () => {
     setAddingToId(null);
     setNewNodeLabel('');
@@ -234,7 +270,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
   const handleDelete = (nodeId: string) => {
     if (!data) return;
-    if (data.id === nodeId) return;
+    if (data.id === nodeId) return; // Can't delete root
 
     const updated = findAndUpdate(data, nodeId, () => null);
     if (updated) updateData(updated);
@@ -251,11 +287,14 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     if (editingId || addingToId) return;
     e.stopPropagation();
     
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const pos = nodePositions[nodeId];
+    if (!pos || !containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
     setDraggingId(nodeId);
     setDragOffset({
-      x: e.clientX - rect.left - rect.width / 2,
-      y: e.clientY - rect.top - rect.height / 2,
+      x: (e.clientX - containerRect.left - pan.x) / zoom - pos.x,
+      y: (e.clientY - containerRect.top - pan.y) / zoom - pos.y,
     });
   };
 
@@ -263,8 +302,12 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     if (!draggingId || !containerRef.current) return;
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const x = (e.clientX - containerRect.left - pan.x) / zoom - dragOffset.x;
-    const y = (e.clientY - containerRect.top - pan.y) / zoom - dragOffset.y;
+    let x = (e.clientX - containerRect.left - pan.x) / zoom - dragOffset.x;
+    let y = (e.clientY - containerRect.top - pan.y) / zoom - dragOffset.y;
+
+    // Clamp to canvas bounds
+    x = Math.max(50, Math.min(CANVAS_WIDTH - 50, x));
+    y = Math.max(50, Math.min(CANVAS_HEIGHT - 50, y));
 
     setNodePositions(prev => ({
       ...prev,
@@ -299,17 +342,23 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
   // Zoom controls
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.2, 2));
-  const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.5));
+  const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.3));
   const handleResetView = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    setZoom(0.8);
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setPan({
+        x: rect.width / 2 - (CANVAS_WIDTH / 2) * 0.8,
+        y: rect.height / 2 - (CANVAS_HEIGHT / 2) * 0.8
+      });
+    }
   };
 
   // Wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(z => Math.min(Math.max(z + delta, 0.5), 2));
+    setZoom(z => Math.min(Math.max(z + delta, 0.3), 2));
   };
 
   useEffect(() => {
@@ -345,7 +394,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     );
   }
 
-  // Get parent-child relationships for connections
+  // Get all connections (parent -> child)
   const getAllConnections = (node: MindmapNode): Array<{ from: string; to: string }> => {
     const connections: Array<{ from: string; to: string }> = [];
     if (node.children) {
@@ -357,6 +406,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     return connections;
   };
 
+  // Get all nodes with their level
   const getAllNodes = (node: MindmapNode, level = 0): Array<{ node: MindmapNode; level: number }> => {
     const nodes: Array<{ node: MindmapNode; level: number }> = [{ node, level }];
     if (node.children) {
@@ -371,14 +421,14 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   const allNodes = getAllNodes(data);
 
   const levelColors = [
-    'bg-primary text-primary-foreground',
-    'bg-secondary text-secondary-foreground border border-border',
-    'bg-muted text-muted-foreground',
+    'bg-primary text-primary-foreground shadow-lg',
+    'bg-secondary text-secondary-foreground border-2 border-primary/30',
+    'bg-muted text-muted-foreground border border-border',
     'bg-card text-card-foreground border border-border/50',
   ];
 
-  // Calculate connection points that touch the node boxes
-  const getConnectionPoints = (fromId: string, toId: string) => {
+  // Calculate line endpoints that touch node edges
+  const getLineEndpoints = (fromId: string, toId: string) => {
     const fromPos = nodePositions[fromId];
     const toPos = nodePositions[toId];
     if (!fromPos || !toPos) return null;
@@ -388,46 +438,59 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     const toW = toPos.width / 2;
     const toH = toPos.height / 2;
 
-    // Direction vector
+    // Vector from source to target
     const dx = toPos.x - fromPos.x;
     const dy = toPos.y - fromPos.y;
-    const angle = Math.atan2(dy, dx);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance === 0) return null;
 
-    // Calculate intersection with from node box edge
-    let startX = fromPos.x;
-    let startY = fromPos.y;
-    
-    // Determine which edge to use for start point
-    const absAngle = Math.abs(angle);
-    if (absAngle < Math.PI / 4 || absAngle > 3 * Math.PI / 4) {
-      // Left or right edge
-      startX = fromPos.x + (dx > 0 ? fromW : -fromW);
-      startY = fromPos.y + Math.tan(angle) * (dx > 0 ? fromW : -fromW);
-      startY = Math.max(fromPos.y - fromH, Math.min(fromPos.y + fromH, startY));
-    } else {
-      // Top or bottom edge
-      startY = fromPos.y + (dy > 0 ? fromH : -fromH);
-      startX = fromPos.x + (dy > 0 ? fromH : -fromH) / Math.tan(angle);
-      startX = Math.max(fromPos.x - fromW, Math.min(fromPos.x + fromW, startX));
-    }
+    // Unit vector
+    const ux = dx / distance;
+    const uy = dy / distance;
 
-    // Calculate intersection with to node box edge
-    let endX = toPos.x;
-    let endY = toPos.y;
-    
-    if (absAngle < Math.PI / 4 || absAngle > 3 * Math.PI / 4) {
-      // Left or right edge
-      endX = toPos.x + (dx > 0 ? -toW : toW);
-      endY = toPos.y - Math.tan(angle) * (dx > 0 ? toW : -toW);
-      endY = Math.max(toPos.y - toH, Math.min(toPos.y + toH, endY));
-    } else {
-      // Top or bottom edge
-      endY = toPos.y + (dy > 0 ? -toH : toH);
-      endX = toPos.x - (dy > 0 ? toH : -toH) / Math.tan(angle);
-      endX = Math.max(toPos.x - toW, Math.min(toPos.x + toW, endX));
-    }
+    // Find intersection with source node edge
+    const getEdgeIntersection = (cx: number, cy: number, w: number, h: number, dirX: number, dirY: number) => {
+      // Check intersection with each edge and find closest
+      const intersections = [];
+      
+      // Right edge
+      if (dirX > 0) {
+        const t = w / dirX;
+        const y = t * dirY;
+        if (Math.abs(y) <= h) intersections.push({ x: cx + w, y: cy + y });
+      }
+      // Left edge
+      if (dirX < 0) {
+        const t = -w / dirX;
+        const y = t * dirY;
+        if (Math.abs(y) <= h) intersections.push({ x: cx - w, y: cy + y });
+      }
+      // Bottom edge
+      if (dirY > 0) {
+        const t = h / dirY;
+        const x = t * dirX;
+        if (Math.abs(x) <= w) intersections.push({ x: cx + x, y: cy + h });
+      }
+      // Top edge
+      if (dirY < 0) {
+        const t = -h / dirY;
+        const x = t * dirX;
+        if (Math.abs(x) <= w) intersections.push({ x: cx + x, y: cy - h });
+      }
 
-    return { startX, startY, endX, endY, angle };
+      return intersections[0] || { x: cx, y: cy };
+    };
+
+    const start = getEdgeIntersection(fromPos.x, fromPos.y, fromW, fromH, ux, uy);
+    const end = getEdgeIntersection(toPos.x, toPos.y, toW, toH, -ux, -uy);
+
+    return { 
+      startX: start.x, 
+      startY: start.y, 
+      endX: end.x, 
+      endY: end.y,
+      angle: Math.atan2(dy, dx)
+    };
   };
 
   const mindmapContent = (
@@ -467,57 +530,56 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       <CardContent className="py-4 flex-1">
         <div 
           ref={containerRef}
-          className={`relative w-full overflow-hidden bg-secondary/20 rounded-lg ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[600px]'}`}
+          className={`relative w-full overflow-hidden bg-secondary/20 rounded-lg border-2 border-dashed border-border/50 ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[600px]'}`}
           style={{ cursor: isPanning ? 'grabbing' : draggingId ? 'grabbing' : 'grab' }}
           onMouseDown={handleCanvasMouseDown}
           onWheel={handleWheel}
         >
           <div
             ref={contentRef}
-            className="absolute inset-0"
+            className="absolute"
             style={{
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: '0 0',
             }}
           >
-            {/* SVG for connections - arrows that connect box edges */}
-            <svg className="absolute inset-0 w-[400%] h-[400%] pointer-events-none" style={{ left: '-150%', top: '-150%' }}>
+            {/* SVG for connection lines */}
+            <svg 
+              className="absolute inset-0 pointer-events-none" 
+              width={CANVAS_WIDTH} 
+              height={CANVAS_HEIGHT}
+              style={{ overflow: 'visible' }}
+            >
               <defs>
                 <marker 
                   id="arrowhead" 
-                  markerWidth="10" 
-                  markerHeight="7" 
-                  refX="9" 
-                  refY="3.5" 
+                  markerWidth="8" 
+                  markerHeight="6" 
+                  refX="7" 
+                  refY="3" 
                   orient="auto"
                   markerUnits="strokeWidth"
                 >
-                  <polygon points="0 0, 10 3.5, 0 7" fill="hsl(var(--primary))" />
+                  <polygon points="0 0, 8 3, 0 6" fill="hsl(var(--primary))" />
                 </marker>
               </defs>
               {connections.map(({ from, to }) => {
-                const points = getConnectionPoints(from, to);
+                const points = getLineEndpoints(from, to);
                 if (!points) return null;
-                
-                // Offset for the SVG positioning (center of the larger canvas)
-                const offsetX = 750;
-                const offsetY = 600;
-                
-                const x1 = points.startX + offsetX;
-                const y1 = points.startY + offsetY;
-                const x2 = points.endX + offsetX;
-                const y2 = points.endY + offsetY;
                 
                 return (
                   <line
                     key={`${from}-${to}`}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
+                    x1={points.startX}
+                    y1={points.startY}
+                    x2={points.endX}
+                    y2={points.endY}
                     stroke="hsl(var(--primary))"
-                    strokeWidth={2}
+                    strokeWidth="2"
                     markerEnd="url(#arrowhead)"
+                    className="transition-all duration-200"
                   />
                 );
               })}
@@ -527,121 +589,114 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
             {allNodes.map(({ node, level }) => {
               const pos = nodePositions[node.id];
               if (!pos) return null;
-              
-              const isEditing = editingId === node.id;
-              const isAdding = addingToId === node.id;
-              const isRoot = level === 0;
+
               const colorClass = levelColors[Math.min(level, levelColors.length - 1)];
+              const isRoot = level === 0;
 
               return (
                 <div
                   key={node.id}
                   ref={(el) => { nodeRefs.current[node.id] = el; }}
-                  className="absolute group"
+                  className={`absolute rounded-lg px-4 py-2 cursor-move transition-shadow hover:shadow-xl ${colorClass} ${
+                    draggingId === node.id ? 'ring-2 ring-primary shadow-2xl' : ''
+                  }`}
                   style={{
                     left: pos.x,
                     top: pos.y,
                     transform: 'translate(-50%, -50%)',
-                    zIndex: draggingId === node.id ? 100 : 10,
+                    minWidth: isRoot ? 180 : level === 1 ? 150 : 120,
+                    maxWidth: 220,
+                    zIndex: draggingId === node.id ? 100 : 10 - level,
                   }}
+                  onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                 >
-                  <div
-                    className={`
-                      relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
-                      ${colorClass} ${isRoot ? 'text-base px-7 py-4 shadow-lg' : 'shadow-md'}
-                      transition-shadow duration-200 hover:shadow-lg
-                      ${draggingId === node.id ? 'ring-2 ring-primary' : ''}
-                    `}
-                    style={{ cursor: isEditing ? 'default' : 'grab', minWidth: '100px', textAlign: 'center', whiteSpace: 'nowrap' }}
-                    onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
-                  >
-                    {isEditing ? (
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  {editingId === node.id ? (
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Input
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="h-7 text-xs min-w-0"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEdit();
+                          if (e.key === 'Escape') handleCancelEdit();
+                        }}
+                      />
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveEdit}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelEdit}>
+                        <XIcon className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : addingToId === node.id ? (
+                    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <p className={`text-center font-medium ${isRoot ? 'text-base' : 'text-sm'}`}>{node.label}</p>
+                      <div className="flex items-center gap-1">
                         <Input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="h-7 text-sm bg-background/50"
+                          value={newNodeLabel}
+                          onChange={(e) => setNewNodeLabel(e.target.value)}
+                          placeholder={t('mindmap.newNode')}
+                          className="h-7 text-xs"
                           autoFocus
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit();
-                            if (e.key === 'Escape') handleCancelEdit();
+                            if (e.key === 'Enter') handleSaveNewChild();
+                            if (e.key === 'Escape') handleCancelAdd();
                           }}
                         />
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveEdit}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveNewChild}>
                           <Check className="h-3 w-3" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelEdit}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCancelAdd}>
                           <XIcon className="h-3 w-3" />
                         </Button>
                       </div>
-                    ) : (
-                      <>
-                        <span className="select-none">{node.label}</span>
-                        {/* Action buttons on hover */}
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center gap-1 bg-background/95 rounded-lg px-1 py-0.5 shadow-lg border border-border/50">
+                    </div>
+                  ) : (
+                    <div className="group">
+                      <p className={`text-center font-medium leading-tight ${isRoot ? 'text-base' : 'text-sm'}`}>
+                        {node.label}
+                      </p>
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-background/90 backdrop-blur rounded-lg p-1 shadow-lg border">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddChild(node.id);
+                          }}
+                          title="Add child"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(node.id, node.label);
+                          }}
+                          title="Edit"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                        {!isRoot && (
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-6 w-6"
+                            className="h-6 w-6 text-destructive hover:text-destructive"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleEdit(node.id, node.label);
+                              handleDelete(node.id);
                             }}
+                            title="Delete"
                           >
-                            <Edit2 className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddChild(node.id);
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          {!isRoot && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 text-destructive hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(node.id);
-                              }}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Add child form */}
-                  {isAdding && (
-                    <div 
-                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 flex items-center gap-2 bg-background p-2 rounded-lg shadow-lg border border-border z-50"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Input
-                        value={newNodeLabel}
-                        onChange={(e) => setNewNodeLabel(e.target.value)}
-                        placeholder={t('mindmap.newNode')}
-                        className="h-8 text-sm w-40"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveNewChild();
-                          if (e.key === 'Escape') handleCancelAdd();
-                        }}
-                      />
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
-                        <XIcon className="h-3 w-3" />
-                      </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -655,8 +710,8 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-background">
-        <Card className="h-full flex flex-col border-0 rounded-none">
+      <div className="fixed inset-0 z-50 bg-background flex flex-col">
+        <Card className="border-0 rounded-none flex-1 flex flex-col h-full">
           {mindmapContent}
         </Card>
       </div>
@@ -664,7 +719,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   }
 
   return (
-    <Card className="border-border/50">
+    <Card className="border-border/50 flex flex-col">
       {mindmapContent}
     </Card>
   );
