@@ -17,13 +17,17 @@ import {
   CheckCircle,
   Loader2,
   Download,
+  PenLine,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { LessonQuiz } from '@/components/lesson/LessonQuiz';
 import { LessonMindmap } from '@/components/lesson/LessonMindmap';
 import { LessonChat } from '@/components/lesson/LessonChat';
+import { LessonExercises } from '@/components/lesson/LessonExercises';
+import { BadgeModal } from '@/components/badges/BadgeModal';
 import { exportLessonToPDF } from '@/utils/pdfExport';
+import { useStreak } from '@/hooks/useStreak';
 
 interface LessonData {
   id: string;
@@ -49,6 +53,7 @@ const Lesson: React.FC = () => {
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { updateStreak } = useStreak();
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [course, setCourse] = useState<CourseInfo | null>(null);
   const [lessons, setLessons] = useState<{ id: string; order_index: number }[]>([]);
@@ -59,6 +64,7 @@ const Lesson: React.FC = () => {
     title: string;
     content: string;
   } | null>(null);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -75,7 +81,7 @@ const Lesson: React.FC = () => {
   // Translate content when language changes
   useEffect(() => {
     if (lesson && course) {
-      const courseLanguage = course.language || 'fr';
+      const courseLanguage = course.language || 'en';
       if (language !== courseLanguage) {
         translateContent();
       } else {
@@ -206,7 +212,14 @@ const Lesson: React.FC = () => {
         }
       }
 
+      // Update streak
+      await updateStreak();
+
       setLesson({ ...lesson, is_completed: true });
+      
+      // Show badge modal
+      setShowBadgeModal(true);
+      
       toast({
         title: t('points.lessonComplete'),
         description: '+10 ' + t('points.earned'),
@@ -231,8 +244,8 @@ const Lesson: React.FC = () => {
     );
     
     toast({
-      title: 'PDF exporté',
-      description: 'Le fichier a été téléchargé.',
+      title: 'PDF exported',
+      description: 'The file has been downloaded.',
     });
   };
 
@@ -290,7 +303,7 @@ const Lesson: React.FC = () => {
               {translating && (
                 <span className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Traduction...
+                  Translating...
                 </span>
               )}
             </div>
@@ -310,6 +323,10 @@ const Lesson: React.FC = () => {
             <TabsTrigger value="content" className="gap-2">
               <BookOpen className="h-4 w-4" />
               {t('lesson.content')}
+            </TabsTrigger>
+            <TabsTrigger value="exercises" className="gap-2">
+              <PenLine className="h-4 w-4" />
+              {t('lesson.exercises')}
             </TabsTrigger>
             <TabsTrigger value="quiz" className="gap-2">
               <Target className="h-4 w-4" />
@@ -337,7 +354,7 @@ const Lesson: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground">Contenu de la leçon en cours de chargement...</p>
+                  <p className="text-muted-foreground">Loading lesson content...</p>
                 )}
               </CardContent>
             </Card>
@@ -361,13 +378,18 @@ const Lesson: React.FC = () => {
             )}
           </TabsContent>
 
+          <TabsContent value="exercises">
+            <LessonExercises 
+              exercises={null}
+            />
+          </TabsContent>
+
           <TabsContent value="quiz">
             <LessonQuiz 
               lessonId={lesson.id} 
               quizData={lesson.quiz_data} 
             />
           </TabsContent>
-
 
           <TabsContent value="mindmap">
             <LessonMindmap 
@@ -403,6 +425,16 @@ const Lesson: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Badge Modal */}
+      <BadgeModal
+        open={showBadgeModal}
+        onOpenChange={setShowBadgeModal}
+        badgeName={t('badges.lessonComplete')}
+        badgeDescription={t('badges.lessonCompleteDesc')}
+        lessonTitle={displayTitle}
+        pointsEarned={10}
+      />
     </div>
   );
 };
