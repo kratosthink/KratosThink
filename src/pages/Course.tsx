@@ -226,24 +226,35 @@ const Course: React.FC = () => {
 
         {/* Course Header */}
         <div className="mb-8 animate-fade-in">
-          <div className="flex items-start justify-between mb-2">
+          <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h1 className="font-display text-3xl font-bold text-foreground">
                   {getDisplayTitle()}
                 </h1>
                 {translating && (
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 )}
-                {/* Spaced Repetition Button - Only shown when all lessons completed */}
-                {allLessonsCompleted && (
+                {/* Spaced Repetition Button - Next to chapter title */}
+                {allLessonsCompleted ? (
+                  <Button 
+                    variant="default" 
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setRevisionModalOpen(true)}
+                  >
+                    <CalendarClock className="h-4 w-4" />
+                    {t('course.scheduleRevision') || 'Schedule Revision'}
+                  </Button>
+                ) : (
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="ml-2"
-                    onClick={() => setRevisionModalOpen(true)}
+                    className="gap-2 opacity-50"
+                    disabled
+                    title={t('course.completeAllForRevision') || 'Complete all lessons first'}
                   >
-                    <CalendarClock className="h-4 w-4 mr-2" />
+                    <CalendarClock className="h-4 w-4" />
                     {t('course.scheduleRevision') || 'Schedule Revision'}
                   </Button>
                 )}
@@ -271,11 +282,6 @@ const Course: React.FC = () => {
               {course.completed_lessons} / {course.total_lessons} {t('course.lessons')}
             </span>
           </div>
-          {!allLessonsCompleted && lessons.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {t('course.completeAllForRevision') || 'Complete all lessons to enable spaced repetition'}
-            </p>
-          )}
         </div>
 
         {/* Lessons List */}

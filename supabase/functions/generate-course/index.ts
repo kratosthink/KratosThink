@@ -73,11 +73,11 @@ Génère un cours avec 6 leçons détaillées. Pour chaque leçon, fournis:
    
    IMPORTANT: Inclure AU MOINS 5 dates importantes par leçon si le sujet s'y prête.
 
-3. Un quiz de 8 questions variées et approfondies:
-   - 2 questions sur les DATES et événements importants (ex: "En quelle année...?")
-   - 2 questions de compréhension conceptuelle
-   - 2 questions d'application pratique
-   - 2 questions d'analyse critique
+3. Un quiz de 12 questions variées et approfondies:
+   - 3 questions sur les DATES et événements importants (ex: "En quelle année...?")
+   - 3 questions de compréhension conceptuelle
+   - 3 questions d'application pratique
+   - 3 questions d'analyse critique
    
    Chaque question doit avoir:
    - La question clairement formulée
@@ -89,10 +89,10 @@ Génère un cours avec 6 leçons détaillées. Pour chaque leçon, fournis:
    Format: QCM avec 4 options, indice correct (0-3)
 
 4. Une structure de mind map riche avec:
-   - Le concept central
-   - 4-6 branches principales avec dates si applicable
-   - 2-4 sous-branches par branche principale
-   - Des mots-clés précis et informatifs
+   - Le concept central (titre de la leçon avec date clé)
+   - 5-7 branches principales représentant les concepts majeurs
+   - 2-4 sous-branches par branche principale avec détails spécifiques
+   - Des dates importantes intégrées dans les labels
 
 Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
 {
@@ -114,7 +114,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
       ],
       "mindmap": {
         "id": "root",
-        "label": "Concept principal",
+        "label": "Concept principal (avec date clé)",
         "children": [
           {
             "id": "child1",
