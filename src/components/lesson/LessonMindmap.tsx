@@ -19,6 +19,8 @@ interface LessonMindmapProps {
 interface NodePosition {
   x: number;
   y: number;
+  width: number;
+  height: number;
 }
 
 export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpdate }) => {
@@ -41,13 +43,44 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Initialize positions with radial layout - more spacing
+  // Initialize positions with radial layout
   useEffect(() => {
     if (data && Object.keys(nodePositions).length === 0) {
       initializePositions(data);
     }
   }, [data]);
+
+  // Update node dimensions after render
+  useEffect(() => {
+    const updateDimensions = () => {
+      const newPositions = { ...nodePositions };
+      let hasChanges = false;
+      
+      Object.entries(nodeRefs.current).forEach(([id, ref]) => {
+        if (ref && newPositions[id]) {
+          const rect = ref.getBoundingClientRect();
+          if (newPositions[id].width !== rect.width || newPositions[id].height !== rect.height) {
+            newPositions[id] = {
+              ...newPositions[id],
+              width: rect.width,
+              height: rect.height,
+            };
+            hasChanges = true;
+          }
+        }
+      });
+      
+      if (hasChanges) {
+        setNodePositions(newPositions);
+      }
+    };
+    
+    // Delay to allow rendering
+    const timer = setTimeout(updateDimensions, 100);
+    return () => clearTimeout(timer);
+  }, [data, nodePositions]);
 
   const initializePositions = (node: MindmapNode) => {
     const centerX = 500;
@@ -69,9 +102,9 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     const allNodes = collectNodes(node, 0, null);
     
     // Position root at center
-    newPositions[node.id] = { x: centerX, y: centerY };
+    newPositions[node.id] = { x: centerX, y: centerY, width: 150, height: 50 };
     
-    // Group children by level and parent
+    // Group children by parent
     const nodesByParent: Record<string, MindmapNode[]> = {};
     allNodes.forEach(({node: n, parentId}) => {
       if (parentId) {
@@ -80,18 +113,17 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       }
     });
 
-    // Calculate positions level by level using radial layout
+    // Calculate positions level by level using radial layout with more spacing
     const positionChildren = (parentId: string, parentPos: NodePosition, level: number, angleStart: number, angleEnd: number) => {
       const children = nodesByParent[parentId] || [];
       if (children.length === 0) return;
       
-      // More spacing between levels - 200px between each level
-      const radius = 180 + level * 60;
+      // Increase spacing between levels - 250px between each level
+      const radius = 220 + level * 80;
       const angleRange = angleEnd - angleStart;
-      const angleStep = children.length > 1 ? angleRange / (children.length) : 0;
+      const angleStep = children.length > 1 ? angleRange / children.length : 0;
       
       children.forEach((child, idx) => {
-        // Spread children evenly in the angle range
         const angle = children.length === 1 
           ? (angleStart + angleEnd) / 2 
           : angleStart + angleStep * (idx + 0.5);
@@ -99,17 +131,16 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
         const x = parentPos.x + Math.cos(angle) * radius;
         const y = parentPos.y + Math.sin(angle) * radius;
         
-        newPositions[child.id] = { x, y };
+        newPositions[child.id] = { x, y, width: 120, height: 40 };
         
         // Recursively position grandchildren in a narrower arc
         const childAngleSpread = Math.PI / (2 + level);
-        positionChildren(child.id, { x, y }, level + 1, angle - childAngleSpread / 2, angle + childAngleSpread / 2);
+        positionChildren(child.id, { x, y, width: 120, height: 40 }, level + 1, angle - childAngleSpread / 2, angle + childAngleSpread / 2);
       });
     };
     
-    // Start with full circle for first level children
     if (node.children && node.children.length > 0) {
-      positionChildren(node.id, { x: centerX, y: centerY }, 1, 0, 2 * Math.PI);
+      positionChildren(node.id, { x: centerX, y: centerY, width: 150, height: 50 }, 1, 0, 2 * Math.PI);
     }
     
     setNodePositions(newPositions);
@@ -174,12 +205,14 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     const parentPos = nodePositions[addingToId];
     if (parentPos) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 180;
+      const radius = 220;
       setNodePositions(prev => ({
         ...prev,
         [newId]: {
           x: parentPos.x + Math.cos(angle) * radius,
           y: parentPos.y + Math.sin(angle) * radius,
+          width: 120,
+          height: 40,
         }
       }));
     }
@@ -235,7 +268,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
     setNodePositions(prev => ({
       ...prev,
-      [draggingId]: { x, y }
+      [draggingId]: { ...prev[draggingId], x, y }
     }));
   }, [draggingId, dragOffset, pan, zoom]);
 
@@ -344,6 +377,59 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     'bg-card text-card-foreground border border-border/50',
   ];
 
+  // Calculate connection points that touch the node boxes
+  const getConnectionPoints = (fromId: string, toId: string) => {
+    const fromPos = nodePositions[fromId];
+    const toPos = nodePositions[toId];
+    if (!fromPos || !toPos) return null;
+
+    const fromW = fromPos.width / 2;
+    const fromH = fromPos.height / 2;
+    const toW = toPos.width / 2;
+    const toH = toPos.height / 2;
+
+    // Direction vector
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    const angle = Math.atan2(dy, dx);
+
+    // Calculate intersection with from node box edge
+    let startX = fromPos.x;
+    let startY = fromPos.y;
+    
+    // Determine which edge to use for start point
+    const absAngle = Math.abs(angle);
+    if (absAngle < Math.PI / 4 || absAngle > 3 * Math.PI / 4) {
+      // Left or right edge
+      startX = fromPos.x + (dx > 0 ? fromW : -fromW);
+      startY = fromPos.y + Math.tan(angle) * (dx > 0 ? fromW : -fromW);
+      startY = Math.max(fromPos.y - fromH, Math.min(fromPos.y + fromH, startY));
+    } else {
+      // Top or bottom edge
+      startY = fromPos.y + (dy > 0 ? fromH : -fromH);
+      startX = fromPos.x + (dy > 0 ? fromH : -fromH) / Math.tan(angle);
+      startX = Math.max(fromPos.x - fromW, Math.min(fromPos.x + fromW, startX));
+    }
+
+    // Calculate intersection with to node box edge
+    let endX = toPos.x;
+    let endY = toPos.y;
+    
+    if (absAngle < Math.PI / 4 || absAngle > 3 * Math.PI / 4) {
+      // Left or right edge
+      endX = toPos.x + (dx > 0 ? -toW : toW);
+      endY = toPos.y - Math.tan(angle) * (dx > 0 ? toW : -toW);
+      endY = Math.max(toPos.y - toH, Math.min(toPos.y + toH, endY));
+    } else {
+      // Top or bottom edge
+      endY = toPos.y + (dy > 0 ? -toH : toH);
+      endX = toPos.x - (dy > 0 ? toH : -toH) / Math.tan(angle);
+      endX = Math.max(toPos.x - toW, Math.min(toPos.x + toW, endX));
+    }
+
+    return { startX, startY, endX, endY, angle };
+  };
+
   const mindmapContent = (
     <>
       <CardHeader className="pb-2">
@@ -394,63 +480,43 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
               transformOrigin: '0 0',
             }}
           >
-            {/* SVG for connections - straight lines with arrows pointing to nodes */}
+            {/* SVG for connections - arrows that connect box edges */}
             <svg className="absolute inset-0 w-[400%] h-[400%] pointer-events-none" style={{ left: '-150%', top: '-150%' }}>
               <defs>
                 <marker 
                   id="arrowhead" 
-                  markerWidth="8" 
-                  markerHeight="6" 
-                  refX="7" 
-                  refY="3" 
+                  markerWidth="10" 
+                  markerHeight="7" 
+                  refX="9" 
+                  refY="3.5" 
                   orient="auto"
                   markerUnits="strokeWidth"
                 >
-                  <polygon points="0 0, 8 3, 0 6" fill="hsl(var(--primary))" opacity="0.7" />
+                  <polygon points="0 0, 10 3.5, 0 7" fill="hsl(var(--primary))" />
                 </marker>
               </defs>
               {connections.map(({ from, to }) => {
-                const fromPos = nodePositions[from];
-                const toPos = nodePositions[to];
-                if (!fromPos || !toPos) return null;
+                const points = getConnectionPoints(from, to);
+                if (!points) return null;
                 
                 // Offset for the SVG positioning (center of the larger canvas)
                 const offsetX = 750;
                 const offsetY = 600;
                 
-                const x1 = fromPos.x + offsetX;
-                const y1 = fromPos.y + offsetY;
-                const x2 = toPos.x + offsetX;
-                const y2 = toPos.y + offsetY;
-                
-                // Calculate the direction from parent to child
-                const dx = x2 - x1;
-                const dy = y2 - y1;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                
-                if (dist === 0) return null;
-                
-                // Shorten the line to stop at the node edge (approximate node size: 80px width, 30px height)
-                const nodeRadius = 50;
-                const ratio = (dist - nodeRadius) / dist;
-                const endX = x1 + dx * ratio;
-                const endY = y1 + dy * ratio;
-                
-                // Start a bit away from the parent node
-                const startRatio = 40 / dist;
-                const startX = x1 + dx * startRatio;
-                const startY = y1 + dy * startRatio;
+                const x1 = points.startX + offsetX;
+                const y1 = points.startY + offsetY;
+                const x2 = points.endX + offsetX;
+                const y2 = points.endY + offsetY;
                 
                 return (
                   <line
                     key={`${from}-${to}`}
-                    x1={startX}
-                    y1={startY}
-                    x2={endX}
-                    y2={endY}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
                     stroke="hsl(var(--primary))"
                     strokeWidth={2}
-                    strokeOpacity={0.6}
                     markerEnd="url(#arrowhead)"
                   />
                 );
@@ -470,6 +536,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
               return (
                 <div
                   key={node.id}
+                  ref={(el) => { nodeRefs.current[node.id] = el; }}
                   className="absolute group"
                   style={{
                     left: pos.x,
@@ -485,7 +552,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                       transition-shadow duration-200 hover:shadow-lg
                       ${draggingId === node.id ? 'ring-2 ring-primary' : ''}
                     `}
-                    style={{ cursor: isEditing ? 'default' : 'grab', minWidth: '100px', textAlign: 'center' }}
+                    style={{ cursor: isEditing ? 'default' : 'grab', minWidth: '100px', textAlign: 'center', whiteSpace: 'nowrap' }}
                     onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                   >
                     {isEditing ? (
@@ -493,13 +560,12 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                         <Input
                           value={editValue}
                           onChange={(e) => setEditValue(e.target.value)}
-                          className="h-7 w-32 text-sm bg-background text-foreground"
+                          className="h-7 text-sm bg-background/50"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit();
                             if (e.key === 'Escape') handleCancelEdit();
                           }}
-                          onMouseDown={(e) => e.stopPropagation()}
                         />
                         <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleSaveEdit}>
                           <Check className="h-3 w-3" />
@@ -510,42 +576,40 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                       </div>
                     ) : (
                       <>
-                        <span className="whitespace-nowrap">{node.label}</span>
-                        <div className="hidden group-hover:flex items-center gap-1 ml-2">
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-6 w-6 opacity-70 hover:opacity-100"
+                        <span className="select-none">{node.label}</span>
+                        {/* Action buttons on hover */}
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:flex items-center gap-1 bg-background/95 rounded-lg px-1 py-0.5 shadow-lg border border-border/50">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEdit(node.id, node.label);
                             }}
-                            onMouseDown={(e) => e.stopPropagation()}
                           >
                             <Edit2 className="h-3 w-3" />
                           </Button>
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-6 w-6 opacity-70 hover:opacity-100"
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleAddChild(node.id);
                             }}
-                            onMouseDown={(e) => e.stopPropagation()}
                           >
                             <Plus className="h-3 w-3" />
                           </Button>
                           {!isRoot && (
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-6 w-6 opacity-70 hover:opacity-100 text-destructive"
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 text-destructive hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDelete(node.id);
                               }}
-                              onMouseDown={(e) => e.stopPropagation()}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -558,29 +622,26 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                   {/* Add child form */}
                   {isAdding && (
                     <div 
-                      className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 p-2 bg-card border border-border rounded-lg shadow-lg z-50"
+                      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 flex items-center gap-2 bg-background p-2 rounded-lg shadow-lg border border-border z-50"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={newNodeLabel}
-                          onChange={(e) => setNewNodeLabel(e.target.value)}
-                          placeholder="Nouveau concept..."
-                          className="h-8 w-40 text-sm"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveNewChild();
-                            if (e.key === 'Escape') handleCancelAdd();
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
-                          <Check className="h-3 w-3" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
-                          <XIcon className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      <Input
+                        value={newNodeLabel}
+                        onChange={(e) => setNewNodeLabel(e.target.value)}
+                        placeholder={t('mindmap.newNode')}
+                        className="h-8 text-sm w-40"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveNewChild();
+                          if (e.key === 'Escape') handleCancelAdd();
+                        }}
+                      />
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCancelAdd}>
+                        <XIcon className="h-3 w-3" />
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -595,7 +656,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   if (isFullscreen) {
     return (
       <div className="fixed inset-0 z-50 bg-background">
-        <Card className="h-full border-0 rounded-none flex flex-col">
+        <Card className="h-full flex flex-col border-0 rounded-none">
           {mindmapContent}
         </Card>
       </div>

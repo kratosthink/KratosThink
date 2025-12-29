@@ -58,7 +58,6 @@ const Course: React.FC = () => {
   const [translating, setTranslating] = useState(false);
   const [translatedContent, setTranslatedContent] = useState<TranslatedContent | null>(null);
   const [revisionModalOpen, setRevisionModalOpen] = useState(false);
-  const [selectedLessonForRevision, setSelectedLessonForRevision] = useState<LessonData | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -181,10 +180,13 @@ const Course: React.FC = () => {
     });
     
     toast({
-      title: 'PDF exporté',
-      description: 'Le cours complet a été téléchargé.',
+      title: 'PDF exported',
+      description: 'The complete course has been downloaded.',
     });
   };
+
+  // Check if all lessons are completed
+  const allLessonsCompleted = lessons.length > 0 && lessons.every(l => l.is_completed);
 
   const progress = course && course.total_lessons > 0
     ? (course.completed_lessons / course.total_lessons) * 100
@@ -233,6 +235,18 @@ const Course: React.FC = () => {
                 {translating && (
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 )}
+                {/* Spaced Repetition Button - Only shown when all lessons completed */}
+                {allLessonsCompleted && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="ml-2"
+                    onClick={() => setRevisionModalOpen(true)}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    {t('course.scheduleRevision') || 'Schedule Revision'}
+                  </Button>
+                )}
               </div>
               {getDisplayDescription() && (
                 <p className="text-muted-foreground mb-4">
@@ -257,6 +271,11 @@ const Course: React.FC = () => {
               {course.completed_lessons} / {course.total_lessons} {t('course.lessons')}
             </span>
           </div>
+          {!allLessonsCompleted && lessons.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              {t('course.completeAllForRevision') || 'Complete all lessons to enable spaced repetition'}
+            </p>
+          )}
         </div>
 
         {/* Lessons List */}
@@ -270,7 +289,7 @@ const Course: React.FC = () => {
           <CardContent>
             {lessons.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-muted-foreground">Aucune leçon disponible</p>
+                <p className="text-muted-foreground">No lessons available</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -308,18 +327,6 @@ const Course: React.FC = () => {
                     <Button 
                       variant="ghost" 
                       size="icon"
-                      title="Révision espacée"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedLessonForRevision(lesson);
-                        setRevisionModalOpen(true);
-                      }}
-                    >
-                      <CalendarClock className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
                       onClick={() => navigate(`/lesson/${lesson.id}`)}
                     >
                       <Play className="h-4 w-4" />
@@ -331,13 +338,13 @@ const Course: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Spaced Repetition Modal */}
-        {selectedLessonForRevision && (
+        {/* Spaced Repetition Modal - For entire course */}
+        {courseId && (
           <SpacedRepetitionModal
             open={revisionModalOpen}
             onOpenChange={setRevisionModalOpen}
-            lessonId={selectedLessonForRevision.id}
-            lessonTitle={getLessonTitle(selectedLessonForRevision)}
+            courseId={courseId}
+            courseTitle={getDisplayTitle()}
           />
         )}
       </div>

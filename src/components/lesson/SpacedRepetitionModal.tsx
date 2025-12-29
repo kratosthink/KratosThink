@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { format, addDays } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { enUS, fr } from 'date-fns/locale';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +24,8 @@ import { useAuth } from '@/contexts/AuthContext';
 interface SpacedRepetitionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lessonId: string;
-  lessonTitle: string;
+  courseId: string;
+  courseTitle: string;
   onSuccess?: () => void;
 }
 
@@ -38,16 +38,18 @@ const getSpacedIntervals = (count: number): number[] => {
 export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
   open,
   onOpenChange,
-  lessonId,
-  lessonTitle,
+  courseId,
+  courseTitle,
   onSuccess
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const { toast } = useToast();
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [revisionCount, setRevisionCount] = useState(3);
   const [saving, setSaving] = useState(false);
+
+  const dateLocale = language === 'fr' ? fr : enUS;
 
   const calculateRevisionDates = (): Date[] => {
     const intervals = getSpacedIntervals(revisionCount);
@@ -59,25 +61,39 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
     
     setSaving(true);
     try {
+      // First get all lessons for this course
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', courseId);
+
+      if (lessonsError) throw lessonsError;
+
       const revisionDates = calculateRevisionDates();
       const formattedDates = revisionDates.map(d => format(d, 'yyyy-MM-dd'));
 
-      const { error } = await supabase
-        .from('lesson_revisions')
-        .upsert({
-          user_id: user.id,
-          lesson_id: lessonId,
-          start_date: format(startDate, 'yyyy-MM-dd'),
-          revision_count: revisionCount,
-          revision_dates: formattedDates,
-          completed_dates: [],
-        }, { onConflict: 'user_id,lesson_id' });
+      // Create revision entries for all lessons in the course
+      const revisionEntries = (lessons || []).map(lesson => ({
+        user_id: user.id,
+        lesson_id: lesson.id,
+        start_date: format(startDate, 'yyyy-MM-dd'),
+        revision_count: revisionCount,
+        revision_dates: formattedDates,
+        completed_dates: [],
+      }));
 
-      if (error) throw error;
+      // Upsert all revisions
+      for (const entry of revisionEntries) {
+        const { error } = await supabase
+          .from('lesson_revisions')
+          .upsert(entry, { onConflict: 'user_id,lesson_id' });
+        
+        if (error) throw error;
+      }
 
       toast({
-        title: 'Révisions planifiées',
-        description: `${revisionCount} révisions programmées pour "${lessonTitle}"`,
+        title: t('revision.scheduled') || 'Revisions scheduled',
+        description: `${revisionCount} ${t('revision.revisionsFor') || 'revisions scheduled for'} "${courseTitle}"`,
       });
 
       onOpenChange(false);
@@ -85,8 +101,8 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
     } catch (error) {
       console.error('Error saving revision schedule:', error);
       toast({
-        title: 'Erreur',
-        description: 'Impossible de planifier les révisions.',
+        title: t('common.error') || 'Error',
+        description: t('revision.errorScheduling') || 'Unable to schedule revisions.',
         variant: 'destructive',
       });
     } finally {
@@ -100,16 +116,16 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>📅 Révision espacée</DialogTitle>
+          <DialogTitle>📅 {t('revision.spacedRepetition') || 'Spaced Repetition'}</DialogTitle>
           <DialogDescription>
-            Planifiez vos révisions pour "{lessonTitle}" selon l'algorithme de répétition espacée.
+            {t('revision.scheduleDescription') || `Schedule your revisions for "${courseTitle}" using the spaced repetition algorithm.`}
           </DialogDescription>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
           {/* Start Date */}
           <div className="grid gap-2">
-            <Label>Date de début</Label>
+            <Label>{t('revision.startDate') || 'Start Date'}</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -120,7 +136,7 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {startDate ? format(startDate, "PPP", { locale: fr }) : "Choisir une date"}
+                  {startDate ? format(startDate, "PPP", { locale: dateLocale }) : (t('revision.chooseDate') || "Choose a date")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -136,7 +152,7 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
 
           {/* Revision Count */}
           <div className="grid gap-2">
-            <Label>Nombre de révisions</Label>
+            <Label>{t('revision.revisionCount') || 'Number of revisions'}</Label>
             <Input
               type="number"
               min={1}
@@ -145,18 +161,18 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
               onChange={(e) => setRevisionCount(Math.min(7, Math.max(1, parseInt(e.target.value) || 1)))}
             />
             <p className="text-xs text-muted-foreground">
-              Entre 1 et 7 révisions (intervalles: J+1, J+3, J+7, J+14, J+30, J+60, J+120)
+              {t('revision.intervalsExplanation') || 'Between 1 and 7 revisions (intervals: D+1, D+3, D+7, D+14, D+30, D+60, D+120)'}
             </p>
           </div>
 
           {/* Preview */}
           <div className="grid gap-2">
-            <Label>Dates de révision prévues</Label>
+            <Label>{t('revision.plannedDates') || 'Planned revision dates'}</Label>
             <div className="space-y-1 p-3 bg-secondary/30 rounded-lg">
               {revisionDates.map((date, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Révision {idx + 1}</span>
-                  <span className="font-medium">{format(date, "d MMMM yyyy", { locale: fr })}</span>
+                  <span className="text-muted-foreground">{t('revision.revision') || 'Revision'} {idx + 1}</span>
+                  <span className="font-medium">{format(date, "d MMMM yyyy", { locale: dateLocale })}</span>
                 </div>
               ))}
             </div>
@@ -165,16 +181,16 @@ export const SpacedRepetitionModal: React.FC<SpacedRepetitionModalProps> = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Annuler
+            {t('common.cancel') || 'Cancel'}
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Enregistrement...
+                {t('common.saving') || 'Saving...'}
               </>
             ) : (
-              'Planifier'
+              t('revision.schedule') || 'Schedule'
             )}
           </Button>
         </DialogFooter>

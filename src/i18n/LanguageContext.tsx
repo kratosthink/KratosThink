@@ -12,16 +12,13 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
+    // Check localStorage first - persist user's choice
     const saved = localStorage.getItem('learnai-language');
     if (saved && saved in translations) {
       return saved as Language;
     }
-    // Try to detect browser language
-    const browserLang = navigator.language.split('-')[0] as Language;
-    if (browserLang in translations) {
-      return browserLang;
-    }
-    return 'fr';
+    // Default to English
+    return 'en';
   });
 
   const isRTL = rtlLanguages.includes(language);
