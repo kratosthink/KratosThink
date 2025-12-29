@@ -50,15 +50,24 @@ serve(async (req) => {
     const targetLangName = languageMap[targetLanguage] || targetLanguage;
     console.log(`Translating to: ${targetLangName}`);
 
-    // Shorter, more efficient prompt
-    const prompt = `Translate to ${targetLangName}. Keep formatting intact.
+    // Full translation prompt - no truncation
+    const prompt = `You are a professional translator. Translate the following content to ${targetLangName}.
 
-TITLE: ${title}
+CRITICAL RULES:
+- Translate EVERY SINGLE WORD of the content completely
+- Do NOT truncate, summarize, or shorten anything
+- Keep ALL markdown formatting exactly as it is (headers, lists, bold, etc.)
+- Preserve all numbers, dates, and proper nouns
+- The translation must be the same length as the original
 
-CONTENT: ${content.substring(0, 3000)}
+TITLE TO TRANSLATE:
+${title}
 
-JSON response only:
-{"title": "translated title", "content": "translated content"}`;
+FULL CONTENT TO TRANSLATE:
+${content}
+
+Respond with valid JSON only:
+{"title": "fully translated title", "content": "fully translated content with all formatting preserved"}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -67,11 +76,12 @@ JSON response only:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite', // Use faster model
+        model: 'google/gemini-2.5-flash', // Better model for full translations
         messages: [
           { role: 'user', content: prompt }
         ],
-        temperature: 0.1, // Lower for faster, more consistent output
+        temperature: 0.1,
+        max_tokens: 16000, // Allow long responses
       }),
     });
 
