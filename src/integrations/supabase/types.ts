@@ -135,6 +135,50 @@ export type Database = {
           },
         ]
       }
+      lesson_revisions: {
+        Row: {
+          completed_dates: string[] | null
+          created_at: string
+          id: string
+          lesson_id: string
+          revision_count: number
+          revision_dates: string[]
+          start_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_dates?: string[] | null
+          created_at?: string
+          id?: string
+          lesson_id: string
+          revision_count?: number
+          revision_dates: string[]
+          start_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_dates?: string[] | null
+          created_at?: string
+          id?: string
+          lesson_id?: string
+          revision_count?: number
+          revision_dates?: string[]
+          start_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_revisions_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lessons: {
         Row: {
           content: string | null

@@ -25,10 +25,13 @@ import {
   ArrowRight,
   Plus,
   Trash2,
-  Loader2
+  Loader2,
+  CalendarClock
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { format, isToday, isTomorrow, parseISO } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 interface Profile {
   full_name: string | null;
@@ -52,6 +55,14 @@ interface TranslatedCourse {
   title: string;
 }
 
+interface UpcomingRevision {
+  id: string;
+  lesson_id: string;
+  lesson_title: string;
+  revision_date: string;
+  course_title: string;
+}
+
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { t, language } = useLanguage();
@@ -59,6 +70,7 @@ const Dashboard: React.FC = () => {
   const { toast } = useToast();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [upcomingRevisions, setUpcomingRevisions] = useState<UpcomingRevision[]>([]);
   const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [translating, setTranslating] = useState(false);
@@ -106,6 +118,48 @@ const Dashboard: React.FC = () => {
 
       if (coursesData) {
         setCourses(coursesData);
+      }
+
+      // Fetch upcoming revisions
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data: revisionsData } = await supabase
+        .from('lesson_revisions')
+        .select('id, lesson_id, revision_dates')
+        .eq('user_id', user!.id);
+
+      if (revisionsData) {
+        const upcoming: UpcomingRevision[] = [];
+        for (const rev of revisionsData) {
+          const dates = rev.revision_dates as string[];
+          const nextDate = dates.find(d => d >= today);
+          if (nextDate) {
+            // Get lesson and course info
+            const { data: lessonData } = await supabase
+              .from('lessons')
+              .select('title, course_id')
+              .eq('id', rev.lesson_id)
+              .maybeSingle();
+            
+            if (lessonData) {
+              const { data: courseData } = await supabase
+                .from('courses')
+                .select('title')
+                .eq('id', lessonData.course_id)
+                .maybeSingle();
+
+              upcoming.push({
+                id: rev.id,
+                lesson_id: rev.lesson_id,
+                lesson_title: lessonData.title,
+                revision_date: nextDate,
+                course_title: courseData?.title || '',
+              });
+            }
+          }
+        }
+        // Sort by date
+        upcoming.sort((a, b) => a.revision_date.localeCompare(b.revision_date));
+        setUpcomingRevisions(upcoming.slice(0, 5));
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -296,6 +350,41 @@ const Dashboard: React.FC = () => {
             </Card>
           ))}
         </div>
+
+        {/* Upcoming Revisions */}
+        {upcomingRevisions.length > 0 && (
+          <Card className="border-border/50 mb-8">
+            <CardHeader>
+              <CardTitle className="font-display text-xl flex items-center gap-2">
+                <CalendarClock className="h-5 w-5" />
+                Révisions à venir
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {upcomingRevisions.map((rev) => {
+                  const date = parseISO(rev.revision_date);
+                  const dateLabel = isToday(date) ? "Aujourd'hui" : isTomorrow(date) ? "Demain" : format(date, "d MMMM", { locale: fr });
+                  return (
+                    <div 
+                      key={rev.id}
+                      onClick={() => navigate(`/lesson/${rev.lesson_id}`)}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 cursor-pointer"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{rev.lesson_title}</p>
+                        <p className="text-sm text-muted-foreground">{rev.course_title}</p>
+                      </div>
+                      <span className={`text-sm px-2 py-1 rounded-full ${isToday(date) ? 'bg-warning/10 text-warning' : 'bg-secondary text-muted-foreground'}`}>
+                        {dateLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Recent Courses */}
         <Card className="border-border/50">

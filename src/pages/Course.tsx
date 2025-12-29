@@ -13,11 +13,13 @@ import {
   ArrowLeft,
   Play,
   Download,
-  Loader2
+  Loader2,
+  CalendarClock
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { exportCourseToPDF } from '@/utils/pdfExport';
 import { useToast } from '@/hooks/use-toast';
+import { SpacedRepetitionModal } from '@/components/lesson/SpacedRepetitionModal';
 
 interface CourseData {
   id: string;
@@ -55,6 +57,8 @@ const Course: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [translating, setTranslating] = useState(false);
   const [translatedContent, setTranslatedContent] = useState<TranslatedContent | null>(null);
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [selectedLessonForRevision, setSelectedLessonForRevision] = useState<LessonData | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -273,22 +277,27 @@ const Course: React.FC = () => {
                 {lessons.map((lesson, index) => (
                   <div
                     key={lesson.id}
-                    onClick={() => navigate(`/lesson/${lesson.id}`)}
-                    className="flex items-center gap-4 p-4 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 transition-colors cursor-pointer animate-fade-in-up"
+                    className="flex items-center gap-4 p-4 rounded-lg border border-border/50 bg-card hover:bg-secondary/30 transition-colors animate-fade-in-up"
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                      lesson.is_completed 
-                        ? 'bg-success text-success-foreground' 
-                        : 'bg-secondary text-muted-foreground'
-                    }`}>
+                    <div 
+                      className={`flex h-10 w-10 items-center justify-center rounded-full cursor-pointer ${
+                        lesson.is_completed 
+                          ? 'bg-success text-success-foreground' 
+                          : 'bg-secondary text-muted-foreground'
+                      }`}
+                      onClick={() => navigate(`/lesson/${lesson.id}`)}
+                    >
                       {lesson.is_completed ? (
                         <CheckCircle className="h-5 w-5" />
                       ) : (
                         <span className="text-sm font-medium">{lesson.order_index}</span>
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => navigate(`/lesson/${lesson.id}`)}
+                    >
                       <h3 className="font-medium text-foreground">
                         {getLessonTitle(lesson)}
                       </h3>
@@ -296,7 +305,23 @@ const Course: React.FC = () => {
                         {t('course.lesson')} {lesson.order_index}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon">
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      title="Révision espacée"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedLessonForRevision(lesson);
+                        setRevisionModalOpen(true);
+                      }}
+                    >
+                      <CalendarClock className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => navigate(`/lesson/${lesson.id}`)}
+                    >
                       <Play className="h-4 w-4" />
                     </Button>
                   </div>
@@ -305,6 +330,16 @@ const Course: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Spaced Repetition Modal */}
+        {selectedLessonForRevision && (
+          <SpacedRepetitionModal
+            open={revisionModalOpen}
+            onOpenChange={setRevisionModalOpen}
+            lessonId={selectedLessonForRevision.id}
+            lessonTitle={getLessonTitle(selectedLessonForRevision)}
+          />
+        )}
       </div>
     </div>
   );

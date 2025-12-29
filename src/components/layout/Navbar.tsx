@@ -95,7 +95,7 @@ export const Navbar: React.FC = () => {
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t('nav.dashboard')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/courses')}>
+                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t('nav.courses')}
                 </DropdownMenuItem>

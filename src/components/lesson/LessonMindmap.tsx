@@ -42,7 +42,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Initialize positions
+  // Initialize positions with radial layout - more spacing
   useEffect(() => {
     if (data && Object.keys(nodePositions).length === 0) {
       initializePositions(data);
@@ -50,54 +50,68 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
   }, [data]);
 
   const initializePositions = (node: MindmapNode) => {
-    const centerX = 400;
-    const centerY = 300;
+    const centerX = 500;
+    const centerY = 400;
     
     const newPositions: Record<string, NodePosition> = {};
     
-    // Collect all children at each level with their parent angle
-    const calculatePositions = (
-      n: MindmapNode, 
-      level: number, 
-      parentAngle: number, 
-      angleSpread: number,
-      parentPos: NodePosition
-    ): void => {
-      if (level === 0) {
-        newPositions[n.id] = { x: centerX, y: centerY };
-        
-        if (n.children && n.children.length > 0) {
-          const childCount = n.children.length;
-          const fullAngle = 2 * Math.PI;
-          const anglePerChild = fullAngle / childCount;
-          
-          n.children.forEach((child, idx) => {
-            const childAngle = anglePerChild * idx - Math.PI / 2;
-            calculatePositions(child, 1, childAngle, anglePerChild * 0.8, newPositions[n.id]);
-          });
-        }
-      } else {
-        // Calculate position based on parent angle - spread children around parent's direction
-        const radius = 120 + level * 80;
-        const x = parentPos.x + Math.cos(parentAngle) * radius;
-        const y = parentPos.y + Math.sin(parentAngle) * radius;
-        newPositions[n.id] = { x, y };
-        
-        if (n.children && n.children.length > 0) {
-          const childCount = n.children.length;
-          const spreadAngle = Math.min(angleSpread, Math.PI * 0.6);
-          const startAngle = parentAngle - spreadAngle / 2;
-          const angleStep = childCount > 1 ? spreadAngle / (childCount - 1) : 0;
-          
-          n.children.forEach((child, idx) => {
-            const childAngle = childCount === 1 ? parentAngle : startAngle + angleStep * idx;
-            calculatePositions(child, level + 1, childAngle, spreadAngle * 0.7, newPositions[n.id]);
-          });
-        }
+    // Collect all nodes with their level
+    const collectNodes = (n: MindmapNode, level: number, parentId: string | null): Array<{node: MindmapNode, level: number, parentId: string | null}> => {
+      const result = [{node: n, level, parentId}];
+      if (n.children) {
+        n.children.forEach(child => {
+          result.push(...collectNodes(child, level + 1, n.id));
+        });
       }
+      return result;
+    };
+
+    const allNodes = collectNodes(node, 0, null);
+    
+    // Position root at center
+    newPositions[node.id] = { x: centerX, y: centerY };
+    
+    // Group children by level and parent
+    const nodesByParent: Record<string, MindmapNode[]> = {};
+    allNodes.forEach(({node: n, parentId}) => {
+      if (parentId) {
+        if (!nodesByParent[parentId]) nodesByParent[parentId] = [];
+        nodesByParent[parentId].push(n);
+      }
+    });
+
+    // Calculate positions level by level using radial layout
+    const positionChildren = (parentId: string, parentPos: NodePosition, level: number, angleStart: number, angleEnd: number) => {
+      const children = nodesByParent[parentId] || [];
+      if (children.length === 0) return;
+      
+      // More spacing between levels - 200px between each level
+      const radius = 180 + level * 60;
+      const angleRange = angleEnd - angleStart;
+      const angleStep = children.length > 1 ? angleRange / (children.length) : 0;
+      
+      children.forEach((child, idx) => {
+        // Spread children evenly in the angle range
+        const angle = children.length === 1 
+          ? (angleStart + angleEnd) / 2 
+          : angleStart + angleStep * (idx + 0.5);
+        
+        const x = parentPos.x + Math.cos(angle) * radius;
+        const y = parentPos.y + Math.sin(angle) * radius;
+        
+        newPositions[child.id] = { x, y };
+        
+        // Recursively position grandchildren in a narrower arc
+        const childAngleSpread = Math.PI / (2 + level);
+        positionChildren(child.id, { x, y }, level + 1, angle - childAngleSpread / 2, angle + childAngleSpread / 2);
+      });
     };
     
-    calculatePositions(node, 0, 0, Math.PI * 2, { x: centerX, y: centerY });
+    // Start with full circle for first level children
+    if (node.children && node.children.length > 0) {
+      positionChildren(node.id, { x: centerX, y: centerY }, 1, 0, 2 * Math.PI);
+    }
+    
     setNodePositions(newPositions);
   };
 
@@ -160,7 +174,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     const parentPos = nodePositions[addingToId];
     if (parentPos) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 120;
+      const radius = 180;
       setNodePositions(prev => ({
         ...prev,
         [newId]: {
@@ -298,6 +312,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
     );
   }
 
+  // Get parent-child relationships for connections
   const getAllConnections = (node: MindmapNode): Array<{ from: string; to: string }> => {
     const connections: Array<{ from: string; to: string }> = [];
     if (node.children) {
@@ -366,7 +381,7 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
       <CardContent className="py-4 flex-1">
         <div 
           ref={containerRef}
-          className={`relative w-full overflow-hidden bg-secondary/20 rounded-lg ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[500px]'}`}
+          className={`relative w-full overflow-hidden bg-secondary/20 rounded-lg ${isFullscreen ? 'h-[calc(100vh-120px)]' : 'h-[600px]'}`}
           style={{ cursor: isPanning ? 'grabbing' : draggingId ? 'grabbing' : 'grab' }}
           onMouseDown={handleCanvasMouseDown}
           onWheel={handleWheel}
@@ -379,11 +394,19 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
               transformOrigin: '0 0',
             }}
           >
-            {/* SVG for connections - curved bezier lines */}
-            <svg className="absolute inset-0 w-[300%] h-[300%] pointer-events-none" style={{ left: '-100%', top: '-100%' }}>
+            {/* SVG for connections - straight lines with arrows pointing to nodes */}
+            <svg className="absolute inset-0 w-[400%] h-[400%] pointer-events-none" style={{ left: '-150%', top: '-150%' }}>
               <defs>
-                <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-                  <polygon points="0 0, 6 2, 0 4" fill="hsl(var(--primary))" opacity="0.6" />
+                <marker 
+                  id="arrowhead" 
+                  markerWidth="8" 
+                  markerHeight="6" 
+                  refX="7" 
+                  refY="3" 
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <polygon points="0 0, 8 3, 0 6" fill="hsl(var(--primary))" opacity="0.7" />
                 </marker>
               </defs>
               {connections.map(({ from, to }) => {
@@ -391,33 +414,43 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                 const toPos = nodePositions[to];
                 if (!fromPos || !toPos) return null;
                 
-                // Offset for the SVG positioning
-                const offsetX = 600;
-                const offsetY = 450;
+                // Offset for the SVG positioning (center of the larger canvas)
+                const offsetX = 750;
+                const offsetY = 600;
                 
                 const x1 = fromPos.x + offsetX;
                 const y1 = fromPos.y + offsetY;
                 const x2 = toPos.x + offsetX;
                 const y2 = toPos.y + offsetY;
                 
-                // Calculate control points for bezier curve
+                // Calculate the direction from parent to child
                 const dx = x2 - x1;
                 const dy = y2 - y1;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const curveStrength = Math.min(dist * 0.3, 50);
                 
-                // Control point perpendicular to line
-                const midX = (x1 + x2) / 2;
-                const midY = (y1 + y2) / 2;
+                if (dist === 0) return null;
+                
+                // Shorten the line to stop at the node edge (approximate node size: 80px width, 30px height)
+                const nodeRadius = 50;
+                const ratio = (dist - nodeRadius) / dist;
+                const endX = x1 + dx * ratio;
+                const endY = y1 + dy * ratio;
+                
+                // Start a bit away from the parent node
+                const startRatio = 40 / dist;
+                const startX = x1 + dx * startRatio;
+                const startY = y1 + dy * startRatio;
                 
                 return (
-                  <path
+                  <line
                     key={`${from}-${to}`}
-                    d={`M ${x1} ${y1} Q ${midX} ${midY - curveStrength * 0.2} ${x2} ${y2}`}
-                    fill="none"
+                    x1={startX}
+                    y1={startY}
+                    x2={endX}
+                    y2={endY}
                     stroke="hsl(var(--primary))"
-                    strokeWidth={2 / zoom}
-                    strokeOpacity={0.5}
+                    strokeWidth={2}
+                    strokeOpacity={0.6}
                     markerEnd="url(#arrowhead)"
                   />
                 );
@@ -447,12 +480,12 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                 >
                   <div
                     className={`
-                      relative flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm 
-                      ${colorClass} ${isRoot ? 'text-base px-6 py-3 shadow-lg' : 'shadow-md'}
+                      relative flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm 
+                      ${colorClass} ${isRoot ? 'text-base px-7 py-4 shadow-lg' : 'shadow-md'}
                       transition-shadow duration-200 hover:shadow-lg
                       ${draggingId === node.id ? 'ring-2 ring-primary' : ''}
                     `}
-                    style={{ cursor: isEditing ? 'default' : 'grab' }}
+                    style={{ cursor: isEditing ? 'default' : 'grab', minWidth: '100px', textAlign: 'center' }}
                     onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
                   >
                     {isEditing ? (
@@ -483,7 +516,10 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                             size="icon" 
                             variant="ghost" 
                             className="h-6 w-6 opacity-70 hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); handleEdit(node.id, node.label); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(node.id, node.label);
+                            }}
                             onMouseDown={(e) => e.stopPropagation()}
                           >
                             <Edit2 className="h-3 w-3" />
@@ -492,7 +528,10 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                             size="icon" 
                             variant="ghost" 
                             className="h-6 w-6 opacity-70 hover:opacity-100"
-                            onClick={(e) => { e.stopPropagation(); handleAddChild(node.id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddChild(node.id);
+                            }}
                             onMouseDown={(e) => e.stopPropagation()}
                           >
                             <Plus className="h-3 w-3" />
@@ -502,7 +541,10 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                               size="icon" 
                               variant="ghost" 
                               className="h-6 w-6 opacity-70 hover:opacity-100 text-destructive"
-                              onClick={(e) => { e.stopPropagation(); handleDelete(node.id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(node.id);
+                              }}
                               onMouseDown={(e) => e.stopPropagation()}
                             >
                               <Trash2 className="h-3 w-3" />
@@ -513,20 +555,24 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
                     )}
                   </div>
 
-                  {/* Add new node form */}
+                  {/* Add child form */}
                   {isAdding && (
-                    <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2 z-50">
-                      <div className="flex items-center gap-2 bg-card border border-border rounded-lg p-2 shadow-lg">
+                    <div 
+                      className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 p-2 bg-card border border-border rounded-lg shadow-lg z-50"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-2">
                         <Input
                           value={newNodeLabel}
                           onChange={(e) => setNewNodeLabel(e.target.value)}
-                          placeholder={t('mindmap.newConcept')}
-                          className="h-8 text-sm w-32"
+                          placeholder="Nouveau concept..."
+                          className="h-8 w-40 text-sm"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveNewChild();
                             if (e.key === 'Escape') handleCancelAdd();
                           }}
+                          onMouseDown={(e) => e.stopPropagation()}
                         />
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleSaveNewChild}>
                           <Check className="h-3 w-3" />
@@ -548,8 +594,8 @@ export const LessonMindmap: React.FC<LessonMindmapProps> = ({ mindmapData, onUpd
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        <Card className="border-0 rounded-none flex-1 flex flex-col h-full overflow-hidden">
+      <div className="fixed inset-0 z-50 bg-background">
+        <Card className="h-full border-0 rounded-none flex flex-col">
           {mindmapContent}
         </Card>
       </div>
