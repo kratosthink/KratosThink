@@ -18,7 +18,8 @@ import {
   Moon, 
   Sun, 
   Globe,
-  Lightbulb
+  Lightbulb,
+  Users
 } from 'lucide-react';
 import { Language, languageNames } from '@/i18n/translations';
 
@@ -48,6 +49,19 @@ export const Navbar: React.FC = () => {
 
         {/* Navigation */}
         <div className="flex items-center gap-2">
+          {/* Feed Button */}
+          {user && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/feed')}
+              className="h-9 w-9"
+              title={t('nav.feed')}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+          )}
+
           {/* Theme Toggle */}
           <Button
             variant="ghost"
@@ -95,9 +109,9 @@ export const Navbar: React.FC = () => {
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t('nav.dashboard')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  {t('nav.courses')}
+                <DropdownMenuItem onClick={() => navigate('/feed')}>
+                  <Users className="mr-2 h-4 w-4" />
+                  {t('nav.feed')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>

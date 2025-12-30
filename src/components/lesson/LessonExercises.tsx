@@ -2,115 +2,94 @@ import React, { useState } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, PenTool, ArrowRight, RotateCcw, Lightbulb, BookOpen, Maximize2, X } from 'lucide-react';
+import { PenTool, ArrowRight, RotateCcw, Lightbulb, Maximize2, X, Loader2, Star, CheckCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Exercise {
-  type: 'fill-blank' | 'short-answer' | 'matching' | 'true-false' | 'ordering';
   question: string;
-  instruction?: string;
-  answer?: string;
-  blanks?: string[];
-  correctAnswer?: boolean;
-  pairs?: { left: string; right: string }[];
-  items?: string[];
-  correctOrder?: number[];
   hint?: string;
-  explanation?: string;
+}
+
+interface GradingResult {
+  score: number;
+  feedback: string;
+  keyPoints: string[];
 }
 
 interface LessonExercisesProps {
   exercises: Exercise[] | null;
+  lessonContent?: string;
 }
 
-export const LessonExercises: React.FC<LessonExercisesProps> = ({ exercises }) => {
+export const LessonExercises: React.FC<LessonExercisesProps> = ({ exercises, lessonContent }) => {
   const { t } = useLanguage();
   const [currentExercise, setCurrentExercise] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
-  const [trueFalseAnswers, setTrueFalseAnswers] = useState<Record<number, boolean | null>>({});
-  const [showResults, setShowResults] = useState<Record<number, boolean>>({});
+  const [gradingResults, setGradingResults] = useState<Record<number, GradingResult>>({});
+  const [grading, setGrading] = useState<Record<number, boolean>>({});
   const [showHint, setShowHint] = useState<Record<number, boolean>>({});
   const [completed, setCompleted] = useState(false);
-  const [score, setScore] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const defaultExercises: Exercise[] = [
     {
-      type: 'fill-blank',
-      question: 'La ____________ est essentielle pour retenir les informations sur le long terme.',
-      instruction: 'Complétez avec le mot qui correspond le mieux au contexte de l\'apprentissage.',
-      blanks: ['répétition', 'pratique', 'révision'],
-      hint: 'C\'est une action qu\'on fait plusieurs fois pour mieux retenir.',
-      explanation: 'La répétition espacée est une technique prouvée scientifiquement pour la mémorisation à long terme.'
+      question: t('exercises.question1'),
+      hint: t('exercises.hint1'),
     },
     {
-      type: 'true-false',
-      question: 'L\'apprentissage actif est plus efficace que l\'apprentissage passif.',
-      instruction: 'Indiquez si cette affirmation est vraie ou fausse.',
-      correctAnswer: true,
-      hint: 'Réfléchissez à la différence entre lire et pratiquer.',
-      explanation: 'L\'apprentissage actif (pratiquer, questionner, enseigner) engage davantage le cerveau que la lecture passive.'
+      question: t('exercises.question2'),
+      hint: t('exercises.hint2'),
     },
     {
-      type: 'short-answer',
-      question: 'Décrivez en quelques phrases ce que vous avez appris de plus important dans cette leçon.',
-      instruction: 'Rédigez une réponse complète d\'au moins 3 phrases qui résume les points clés.',
-      hint: 'Structurez votre réponse avec une introduction, le contenu principal et une conclusion.',
-      explanation: 'L\'écriture aide à consolider les apprentissages en forçant à reformuler les concepts.'
+      question: t('exercises.question3'),
+      hint: t('exercises.hint3'),
     },
-    {
-      type: 'fill-blank',
-      question: 'Une ____________ mentale permet de visualiser les liens entre les concepts.',
-      instruction: 'Trouvez le mot qui désigne un outil visuel d\'organisation des idées.',
-      blanks: ['carte', 'map', 'mind map'],
-      hint: 'C\'est un schéma qui part d\'une idée centrale.',
-      explanation: 'Les cartes mentales (mind maps) sont des outils puissants pour organiser et mémoriser l\'information.'
-    },
-    {
-      type: 'true-false',
-      question: 'La mémorisation est plus efficace lorsqu\'on étudie en une seule longue session.',
-      instruction: 'Déterminez si cette méthode d\'étude est recommandée.',
-      correctAnswer: false,
-      hint: 'Pensez à la fatigue cognitive et à la courbe de l\'oubli.',
-      explanation: 'Les sessions d\'étude courtes et espacées sont plus efficaces que les longues sessions intensives (effet de spacing).'
-    },
-    {
-      type: 'short-answer',
-      question: 'Expliquez comment vous pourriez appliquer les concepts de cette leçon dans votre vie quotidienne.',
-      instruction: 'Donnez au moins deux exemples concrets d\'application pratique.',
-      hint: 'Pensez à des situations de travail, d\'études ou de vie personnelle.',
-      explanation: 'Relier les concepts à des situations réelles renforce la mémorisation et la compréhension.'
-    }
   ];
 
   const exerciseList = exercises && exercises.length > 0 ? exercises : defaultExercises;
   const exercise = exerciseList[currentExercise];
   const progress = ((currentExercise + 1) / exerciseList.length) * 100;
+  const totalScore = Object.values(gradingResults).reduce((sum, r) => sum + r.score, 0);
+  const averageScore = Object.keys(gradingResults).length > 0 
+    ? totalScore / Object.keys(gradingResults).length 
+    : 0;
 
-  const checkAnswer = (): boolean => {
-    switch (exercise.type) {
-      case 'fill-blank':
-        if (exercise.blanks) {
-          const answer = userAnswers[currentExercise]?.toLowerCase().trim();
-          return exercise.blanks.some(b => b.toLowerCase() === answer);
-        }
-        return false;
-      case 'true-false':
-        return trueFalseAnswers[currentExercise] === exercise.correctAnswer;
-      case 'short-answer':
-        return (userAnswers[currentExercise]?.trim().length || 0) > 20;
-      default:
-        return false;
-    }
-  };
+  const handleSubmitAnswer = async () => {
+    const answer = userAnswers[currentExercise]?.trim();
+    if (!answer || answer.length < 20) return;
 
-  const handleSubmitAnswer = () => {
-    setShowResults(prev => ({ ...prev, [currentExercise]: true }));
-    if (checkAnswer()) {
-      setScore(s => s + 1);
+    setGrading(prev => ({ ...prev, [currentExercise]: true }));
+
+    try {
+      const { data, error } = await supabase.functions.invoke('grade-exercise', {
+        body: {
+          question: exercise.question,
+          userAnswer: answer,
+          lessonContext: lessonContent?.substring(0, 2000) || '',
+        },
+      });
+
+      if (error) throw error;
+
+      setGradingResults(prev => ({
+        ...prev,
+        [currentExercise]: data,
+      }));
+    } catch (error) {
+      console.error('Grading error:', error);
+      // Fallback result
+      setGradingResults(prev => ({
+        ...prev,
+        [currentExercise]: {
+          score: 5,
+          feedback: 'Unable to grade at this time. Your answer has been recorded.',
+          keyPoints: [],
+        },
+      }));
+    } finally {
+      setGrading(prev => ({ ...prev, [currentExercise]: false }));
     }
   };
 
@@ -125,39 +104,54 @@ export const LessonExercises: React.FC<LessonExercisesProps> = ({ exercises }) =
   const handleRetry = () => {
     setCurrentExercise(0);
     setUserAnswers({});
-    setTrueFalseAnswers({});
-    setShowResults({});
+    setGradingResults({});
     setShowHint({});
     setCompleted(false);
-    setScore(0);
   };
 
   const toggleHint = () => {
     setShowHint(prev => ({ ...prev, [currentExercise]: !prev[currentExercise] }));
   };
 
-  const canSubmit = (): boolean => {
-    switch (exercise.type) {
-      case 'fill-blank':
-      case 'short-answer':
-        return !!userAnswers[currentExercise]?.trim();
-      case 'true-false':
-        return trueFalseAnswers[currentExercise] !== undefined && trueFalseAnswers[currentExercise] !== null;
-      default:
-        return false;
-    }
+  const canSubmit = (userAnswers[currentExercise]?.trim().length || 0) >= 20;
+  const hasResult = gradingResults[currentExercise] !== undefined;
+  const result = gradingResults[currentExercise];
+
+  const getScoreColor = (score: number) => {
+    if (score >= 8) return 'text-success';
+    if (score >= 5) return 'text-warning';
+    return 'text-destructive';
   };
 
-  const getTypeLabel = (type: string): string => {
-    switch (type) {
-      case 'fill-blank': return t('exercises.fillBlank');
-      case 'short-answer': return t('exercises.shortAnswer');
-      case 'true-false': return t('exercises.trueFalse');
-      case 'matching': return t('exercises.matching');
-      case 'ordering': return t('exercises.ordering');
-      default: return t('exercises.exercise');
-    }
+  const getScoreBg = (score: number) => {
+    if (score >= 8) return 'bg-success/10';
+    if (score >= 5) return 'bg-warning/10';
+    return 'bg-destructive/10';
   };
+
+  if (completed) {
+    return (
+      <Card className="border-border/50">
+        <CardContent className="py-12 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="h-16 w-16 rounded-full bg-success/10 flex items-center justify-center">
+              <CheckCircle className="h-8 w-8 text-success" />
+            </div>
+          </div>
+          <h3 className="text-xl font-bold text-foreground mb-2">{t('exercises.completed')}</h3>
+          <p className="text-muted-foreground mb-2">
+            {t('exercises.yourScore')}: <span className={`font-bold ${getScoreColor(averageScore)}`}>{averageScore.toFixed(1)}{t('exercises.outOf10')}</span>
+          </p>
+          <div className="flex justify-center gap-4 mt-6">
+            <Button variant="outline" onClick={handleRetry}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              {t('exercises.restart')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const exerciseContent = (
     <>
@@ -168,7 +162,7 @@ export const LessonExercises: React.FC<LessonExercisesProps> = ({ exercises }) =
           </span>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium px-2 py-1 bg-secondary rounded">
-              {getTypeLabel(exercise.type)}
+              {t('exercises.shortAnswer')}
             </span>
             <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(!isFullscreen)}>
               {isFullscreen ? <X className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -178,11 +172,111 @@ export const LessonExercises: React.FC<LessonExercisesProps> = ({ exercises }) =
         <Progress value={progress} className="h-2" />
         <CardTitle className="text-lg flex items-center gap-2 mt-4">
           <PenTool className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm font-normal text-muted-foreground">{t('quiz.score')}: {score}</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {Object.keys(gradingResults).length > 0 && (
+              <>{t('exercises.yourScore')}: {averageScore.toFixed(1)}{t('exercises.outOf10')}</>
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6 flex-1 overflow-auto">
-        {/* ... le reste du rendu avec la logique Fill-blank, True/False, Short-answer, hint, actions ... */}
+        {/* Question */}
+        <div className="bg-secondary/30 rounded-lg p-4">
+          <p className="text-foreground font-medium">{exercise.question}</p>
+        </div>
+
+        {/* Hint */}
+        {exercise.hint && (
+          <div>
+            <Button variant="ghost" size="sm" onClick={toggleHint} className="text-muted-foreground">
+              <Lightbulb className="h-4 w-4 mr-2" />
+              {showHint[currentExercise] ? t('exercises.hideHint') : t('exercises.showHint')}
+            </Button>
+            {showHint[currentExercise] && (
+              <div className="mt-2 p-3 bg-warning/10 border border-warning/30 rounded-lg text-sm text-warning-foreground">
+                {exercise.hint}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Answer Input */}
+        {!hasResult ? (
+          <div className="space-y-2">
+            <Textarea
+              placeholder={t('exercises.writeAnswer')}
+              value={userAnswers[currentExercise] || ''}
+              onChange={(e) => setUserAnswers(prev => ({ ...prev, [currentExercise]: e.target.value }))}
+              rows={6}
+              className="resize-none"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{userAnswers[currentExercise]?.length || 0} {t('exercises.characters')}</span>
+              <span>20 {t('exercises.minimum')}</span>
+            </div>
+          </div>
+        ) : (
+          /* Grading Result */
+          <div className="space-y-4">
+            <div className={`rounded-lg p-4 ${getScoreBg(result.score)}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium text-foreground">{t('exercises.yourScore')}</span>
+                <div className="flex items-center gap-1">
+                  <Star className={`h-5 w-5 ${getScoreColor(result.score)}`} />
+                  <span className={`text-2xl font-bold ${getScoreColor(result.score)}`}>
+                    {result.score}{t('exercises.outOf10')}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-secondary/30 rounded-lg p-4">
+              <h4 className="font-medium text-foreground mb-2">{t('exercises.feedback')}</h4>
+              <p className="text-muted-foreground text-sm">{result.feedback}</p>
+            </div>
+
+            {result.keyPoints && result.keyPoints.length > 0 && (
+              <div className="bg-secondary/30 rounded-lg p-4">
+                <h4 className="font-medium text-foreground mb-2">{t('exercises.keyPoints')}</h4>
+                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                  {result.keyPoints.map((point, i) => (
+                    <li key={i}>{point}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2">
+          {!hasResult ? (
+            <Button 
+              onClick={handleSubmitAnswer} 
+              disabled={!canSubmit || grading[currentExercise]}
+            >
+              {grading[currentExercise] ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t('exercises.grading')}
+                </>
+              ) : (
+                t('quiz.submit')
+              )}
+            </Button>
+          ) : (
+            <Button onClick={handleNext}>
+              {currentExercise < exerciseList.length - 1 ? (
+                <>
+                  {t('common.next')}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </>
+              ) : (
+                t('exercises.seeResults')
+              )}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </>
   );
