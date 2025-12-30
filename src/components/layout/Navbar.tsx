@@ -49,14 +49,14 @@ export const Navbar: React.FC = () => {
 
         {/* Navigation */}
         <div className="flex items-center gap-2">
-          {/* Feed Button */}
+          {/* Community Button */}
           {user && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate('/feed')}
               className="h-9 w-9"
-              title={t('nav.feed')}
+              title={t('nav.community')}
             >
               <Users className="h-4 w-4" />
             </Button>
@@ -111,7 +111,7 @@ export const Navbar: React.FC = () => {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/feed')}>
                   <Users className="mr-2 h-4 w-4" />
-                  {t('nav.feed')}
+                  {t('nav.community')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
