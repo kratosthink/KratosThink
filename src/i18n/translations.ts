@@ -232,6 +232,44 @@ export const translations = {
     'night.unlockedDesc': 'Vous avez atteint 100 points ! Activez la musique relaxante.',
     'night.playMusic': 'Jouer la musique',
     'night.stopMusic': 'Arrêter la musique',
+    
+    // Feed
+    'feed.title': 'Communauté',
+    'feed.subtitle': 'Partagez vos articles et découvrez ceux des autres',
+    'feed.newPost': 'Nouveau post',
+    'feed.createPost': 'Créer un post',
+    'feed.postTitlePlaceholder': 'Titre de votre article...',
+    'feed.postContentPlaceholder': 'Écrivez votre contenu ici...',
+    'feed.publish': 'Publier',
+    'feed.noPosts': 'Aucun post pour le moment',
+    'feed.postCreated': 'Post publié !',
+    'feed.postCreatedDesc': 'Votre article est maintenant visible par tous.',
+    'feed.postDeleted': 'Post supprimé',
+    'nav.feed': 'Communauté',
+    
+    // Lesson highlight
+    'lesson.highlightColor': 'Surlignage',
+    'lesson.chooseColor': 'Choisir une couleur',
+    
+    // Master
+    'master.selectTitle': 'Choisir votre Master',
+    'master.selectDescription': 'Choisissez ce chapitre comme votre objectif d\'expertise. Complétez-le pour obtenir un diplôme KratosThink.',
+    'master.diplomaInfo': 'Diplôme certifié à la fin',
+    'master.warningOnce': 'Attention : vous ne pouvez choisir qu\'un seul Master.',
+    'master.confirm': 'Confirmer le Master',
+    'master.unlockAt': 'Débloquez à 200 points',
+    'master.yourMaster': 'Votre Master',
+    'master.certified': 'Certifié',
+    'master.inProgress': 'En cours',
+    'master.getCertified': 'Obtenir le diplôme',
+    'master.certificationComplete': 'Certification obtenue !',
+    
+    // Exercises AI
+    'exercises.grading': 'Correction en cours...',
+    'exercises.yourScore': 'Votre note',
+    'exercises.outOf10': '/10',
+    'exercises.feedback': 'Feedback',
+    'exercises.keyPoints': 'Points clés à mentionner',
   },
   en: {
     'nav.home': 'Home',
@@ -427,6 +465,44 @@ export const translations = {
     'night.unlockedDesc': 'You reached 100 points! Enable the relaxing music.',
     'night.playMusic': 'Play music',
     'night.stopMusic': 'Stop music',
+    
+    // Feed
+    'feed.title': 'Community',
+    'feed.subtitle': 'Share your articles and discover others',
+    'feed.newPost': 'New Post',
+    'feed.createPost': 'Create Post',
+    'feed.postTitlePlaceholder': 'Title of your article...',
+    'feed.postContentPlaceholder': 'Write your content here...',
+    'feed.publish': 'Publish',
+    'feed.noPosts': 'No posts yet',
+    'feed.postCreated': 'Post published!',
+    'feed.postCreatedDesc': 'Your article is now visible to everyone.',
+    'feed.postDeleted': 'Post deleted',
+    'nav.feed': 'Community',
+    
+    // Lesson highlight
+    'lesson.highlightColor': 'Highlight',
+    'lesson.chooseColor': 'Choose a color',
+    
+    // Master
+    'master.selectTitle': 'Choose your Master',
+    'master.selectDescription': 'Choose this chapter as your expertise goal. Complete it to earn a KratosThink diploma.',
+    'master.diplomaInfo': 'Certified diploma upon completion',
+    'master.warningOnce': 'Warning: you can only choose one Master.',
+    'master.confirm': 'Confirm Master',
+    'master.unlockAt': 'Unlock at 200 points',
+    'master.yourMaster': 'Your Master',
+    'master.certified': 'Certified',
+    'master.inProgress': 'In Progress',
+    'master.getCertified': 'Get Certified',
+    'master.certificationComplete': 'Certification complete!',
+    
+    // Exercises AI
+    'exercises.grading': 'Grading in progress...',
+    'exercises.yourScore': 'Your score',
+    'exercises.outOf10': '/10',
+    'exercises.feedback': 'Feedback',
+    'exercises.keyPoints': 'Key points to mention',
   },
   it: {
     'nav.home': 'Home',

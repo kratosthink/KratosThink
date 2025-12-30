@@ -91,6 +91,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_posts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          likes_count: number | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          likes_count?: number | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lesson_progress: {
         Row: {
           completed_at: string | null
@@ -229,11 +259,76 @@ export type Database = {
           },
         ]
       }
+      master_selections: {
+        Row: {
+          certified_at: string | null
+          course_id: string
+          id: string
+          is_certified: boolean | null
+          selected_at: string
+          user_id: string
+        }
+        Insert: {
+          certified_at?: string | null
+          course_id: string
+          id?: string
+          is_certified?: boolean | null
+          selected_at?: string
+          user_id: string
+        }
+        Update: {
+          certified_at?: string | null
+          course_id?: string
+          id?: string
+          is_certified?: boolean | null
+          selected_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "master_selections_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "feed_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string
           full_name: string | null
+          highlight_color: string | null
           id: string
           last_activity_date: string | null
           preferred_language: string | null
@@ -246,6 +341,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null
+          highlight_color?: string | null
           id?: string
           last_activity_date?: string | null
           preferred_language?: string | null
@@ -258,6 +354,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           full_name?: string | null
+          highlight_color?: string | null
           id?: string
           last_activity_date?: string | null
           preferred_language?: string | null

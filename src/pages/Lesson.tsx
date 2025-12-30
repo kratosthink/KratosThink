@@ -381,6 +381,7 @@ const Lesson: React.FC = () => {
           <TabsContent value="exercises">
             <LessonExercises 
               exercises={null}
+              lessonContent={displayContent}
             />
           </TabsContent>
 
