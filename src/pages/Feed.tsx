@@ -179,7 +179,7 @@ const Feed: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-display text-3xl font-bold text-foreground">{t('feed.title')}</h1>
+            <h1 className="font-display text-3xl font-bold text-foreground">{t('nav.community')}</h1>
             <p className="text-muted-foreground">{t('feed.subtitle')}</p>
           </div>
           

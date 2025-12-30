@@ -26,6 +26,7 @@ export const translations = {
     'nav.logout': 'Déconnexion',
     'nav.login': 'Connexion',
     'nav.signup': 'Inscription',
+    'nav.community': 'Communauté',
     
     // Auth
     'auth.login': 'Connexion',
@@ -279,6 +280,7 @@ export const translations = {
     'nav.logout': 'Logout',
     'nav.login': 'Login',
     'nav.signup': 'Sign Up',
+    'nav.community': 'Community',
     
     'auth.login': 'Login',
     'auth.signup': 'Create Account',
@@ -512,6 +514,7 @@ export const translations = {
     'nav.logout': 'Esci',
     'nav.login': 'Accedi',
     'nav.signup': 'Registrati',
+    'nav.community': 'Comunità',
     
     'auth.login': 'Accedi',
     'auth.signup': 'Crea account',
@@ -607,6 +610,7 @@ export const translations = {
     'nav.logout': 'Cerrar sesión',
     'nav.login': 'Iniciar sesión',
     'nav.signup': 'Registrarse',
+    'nav.community': 'Comunidad',
     
     'auth.login': 'Iniciar sesión',
     'auth.signup': 'Crear cuenta',
@@ -702,6 +706,7 @@ export const translations = {
     'nav.logout': 'Abmelden',
     'nav.login': 'Anmelden',
     'nav.signup': 'Registrieren',
+    'nav.community': 'Gemeinschaft',
     
     'auth.login': 'Anmelden',
     'auth.signup': 'Konto erstellen',
@@ -797,6 +802,7 @@ export const translations = {
     'nav.logout': 'Deconectare',
     'nav.login': 'Autentificare',
     'nav.signup': 'Înregistrare',
+    'nav.community': 'Comunitate',
     
     'auth.login': 'Autentificare',
     'auth.signup': 'Creează cont',
@@ -892,6 +898,7 @@ export const translations = {
     'nav.logout': 'Выйти',
     'nav.login': 'Войти',
     'nav.signup': 'Регистрация',
+    'nav.community': 'Сообщество',
     
     'auth.login': 'Войти',
     'auth.signup': 'Создать аккаунт',
@@ -987,7 +994,7 @@ export const translations = {
     'nav.logout': 'تسجيل الخروج',
     'nav.login': 'تسجيل الدخول',
     'nav.signup': 'إنشاء حساب',
-    
+    'nav.community': 'المجتمع',
     'auth.login': 'تسجيل الدخول',
     'auth.signup': 'إنشاء حساب',
     'auth.email': 'البريد الإلكتروني',
@@ -1082,7 +1089,7 @@ export const translations = {
     'nav.logout': '退出',
     'nav.login': '登录',
     'nav.signup': '注册',
-    
+    'nav.community': '社区',
     'auth.login': '登录',
     'auth.signup': '创建账户',
     'auth.email': '电子邮件',

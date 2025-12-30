@@ -69,35 +69,53 @@ ${content}
 Respond with valid JSON only:
 {"title": "fully translated title", "content": "fully translated content with all formatting preserved"}`;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash', // Better model for full translations
-        messages: [
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 16000, // Allow long responses
-      }),
-    });
+    // Retry logic for AI requests
+    let aiResponse;
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    while (retryCount <= maxRetries) {
+      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash-lite', // Use faster/lighter model for translations
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 16000,
+        }),
+      });
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI Gateway error:', aiResponse.status, errorText);
+      if (aiResponse.ok) {
+        break;
+      }
       
-      if (aiResponse.status === 429) {
-        // Return original content on rate limit instead of failing
-        console.log('Rate limited, returning original content');
+      const errorText = await aiResponse.text();
+      console.error(`AI Gateway error (attempt ${retryCount + 1}):`, aiResponse.status, errorText);
+      
+      if (aiResponse.status === 429 || aiResponse.status === 402) {
+        // Rate limited or payment required - don't retry, return original content
+        console.log('Rate limited or payment required, returning original content');
         return new Response(JSON.stringify({ title, content }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      // For other errors, return original content
+      retryCount++;
+      if (retryCount <= maxRetries) {
+        // Wait before retry (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+      }
+    }
+
+    if (!aiResponse || !aiResponse.ok) {
+      // All retries failed, return original content
+      console.log('All retries failed, returning original content');
       return new Response(JSON.stringify({ title, content }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

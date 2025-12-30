@@ -411,14 +411,24 @@ const Lesson: React.FC = () => {
         <div className="flex justify-between mt-8">
           <Button
             variant="outline"
-            onClick={() => prevLesson && navigate(`/lesson/${prevLesson.id}`)}
+            onClick={() => {
+              if (prevLesson) {
+                navigate(`/lesson/${prevLesson.id}`);
+                window.location.reload();
+              }
+            }}
             disabled={!prevLesson}
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             {t('course.prevLesson')}
           </Button>
           <Button
-            onClick={() => nextLesson && navigate(`/lesson/${nextLesson.id}`)}
+            onClick={() => {
+              if (nextLesson) {
+                navigate(`/lesson/${nextLesson.id}`);
+                window.location.reload();
+              }
+            }}
             disabled={!nextLesson}
           >
             {t('course.nextLesson')}
