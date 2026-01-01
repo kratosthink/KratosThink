@@ -1,4 +1,12 @@
+/**
+ * Grade Exercise Edge Function - AI-powered exercise grading
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable AI Gateway (google/gemini-2.5-flash) for grading
+ * - Lovable Cloud Authentication for user validation
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,9 +19,49 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Validate user authentication
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error('Authentication failed:', authError?.message);
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Authenticated user:', user.id);
+
     const { question, userAnswer, lessonContext } = await req.json();
 
-    console.log('Grading exercise for question:', question.substring(0, 50));
+    // SECURITY: Validate input lengths to prevent abuse
+    if (userAnswer && userAnswer.length > 5000) {
+      return new Response(JSON.stringify({ 
+        error: 'Answer too long',
+        score: 0,
+        feedback: 'Your answer exceeds the maximum length.',
+        keyPoints: []
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Grading exercise for question:', question?.substring(0, 50), 'userId:', user.id);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
