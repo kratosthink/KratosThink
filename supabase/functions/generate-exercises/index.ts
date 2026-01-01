@@ -1,4 +1,12 @@
+/**
+ * Generate Exercises Edge Function - AI-powered exercise generation
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable AI Gateway (google/gemini-2.5-flash) for exercise generation
+ * - Lovable Cloud Authentication for user validation
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,10 +31,45 @@ serve(async (req) => {
   }
 
   try {
+    // SECURITY: Validate user authentication
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(JSON.stringify({ error: 'Unauthorized', exercises: [] }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error('Authentication failed:', authError?.message);
+      return new Response(JSON.stringify({ error: 'Unauthorized', exercises: [] }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Authenticated user:', user.id);
+
     const { lessonTitle, lessonContent, language = 'en' } = await req.json();
     
     if (!lessonContent) {
       return new Response(JSON.stringify({ exercises: [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // SECURITY: Validate input lengths to prevent abuse
+    if (lessonContent.length > 10000) {
+      return new Response(JSON.stringify({ error: 'Content too long', exercises: [] }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -37,7 +80,7 @@ serve(async (req) => {
     }
 
     const targetLanguage = languageMap[language] || 'English';
-    console.log(`Generating exercises for: ${lessonTitle}, language: ${targetLanguage}`);
+    console.log(`Generating exercises for: ${lessonTitle}, language: ${targetLanguage}, userId: ${user.id}`);
 
     const prompt = `You are an educational expert. Create 3 detailed open-ended exercises for this lesson.
 
