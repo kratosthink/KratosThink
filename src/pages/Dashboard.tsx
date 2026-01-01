@@ -1,3 +1,10 @@
+/**
+ * Dashboard Page - User's main dashboard with courses, stats, and progress
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable Cloud (Supabase) for user data, courses, and progress
+ * - Lovable Cloud (Supabase Auth) for user authentication
+ */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,12 +33,12 @@ import {
   Plus,
   Trash2,
   Loader2,
-  CalendarClock
+  CalendarClock,
+  Star
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
-import { fr } from 'date-fns/locale';
 
 interface Profile {
   full_name: string | null;
@@ -47,12 +54,6 @@ interface Course {
   completed_lessons: number;
   status: string;
   created_at: string;
-  language: string | null;
-}
-
-interface TranslatedCourse {
-  id: string;
-  title: string;
 }
 
 interface UpcomingRevision {
@@ -63,17 +64,18 @@ interface UpcomingRevision {
   course_title: string;
 }
 
+// Points milestones for progress bar
+const POINTS_MILESTONES = [0, 50, 100, 200, 500, 1000, 2000, 5000];
+
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
   const [upcomingRevisions, setUpcomingRevisions] = useState<UpcomingRevision[]>([]);
-  const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [translating, setTranslating] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -90,15 +92,9 @@ const Dashboard: React.FC = () => {
     }
   }, [user]);
 
-  // Translate course titles when language changes
-  useEffect(() => {
-    if (courses.length > 0) {
-      translateCourseTitles();
-    }
-  }, [language, courses]);
-
   const fetchData = async () => {
     try {
+      // LOVABLE SERVICE: Supabase Database
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name, total_points, streak_days')
@@ -133,7 +129,6 @@ const Dashboard: React.FC = () => {
           const dates = rev.revision_dates as string[];
           const nextDate = dates.find(d => d >= today);
           if (nextDate) {
-            // Get lesson and course info
             const { data: lessonData } = await supabase
               .from('lessons')
               .select('title, course_id')
@@ -157,7 +152,6 @@ const Dashboard: React.FC = () => {
             }
           }
         }
-        // Sort by date
         upcoming.sort((a, b) => a.revision_date.localeCompare(b.revision_date));
         setUpcomingRevisions(upcoming.slice(0, 5));
       }
@@ -166,40 +160,6 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const translateCourseTitles = async () => {
-    // Check if any course needs translation
-    const coursesToTranslate = courses.filter(c => c.language && c.language !== language);
-    
-    if (coursesToTranslate.length === 0) {
-      setTranslatedTitles({});
-      return;
-    }
-
-    setTranslating(true);
-    const newTranslations: Record<string, string> = {};
-
-    for (const course of coursesToTranslate) {
-      try {
-        const { data, error } = await supabase.functions.invoke('translate-content', {
-          body: {
-            title: course.title,
-            content: course.title, // Just translate title
-            targetLanguage: language,
-          },
-        });
-
-        if (!error && data?.title) {
-          newTranslations[course.id] = data.title;
-        }
-      } catch (error) {
-        console.error('Translation error for course:', course.id, error);
-      }
-    }
-
-    setTranslatedTitles(newTranslations);
-    setTranslating(false);
   };
 
   const handleDeleteClick = (e: React.MouseEvent, course: Course) => {
@@ -213,13 +173,11 @@ const Dashboard: React.FC = () => {
 
     setDeleting(true);
     try {
-      // Delete lessons first (cascade should handle this, but being explicit)
       await supabase
         .from('lessons')
         .delete()
         .eq('course_id', courseToDelete.id);
 
-      // Delete the course
       const { error } = await supabase
         .from('courses')
         .delete()
@@ -227,18 +185,17 @@ const Dashboard: React.FC = () => {
 
       if (error) throw error;
 
-      // Update local state
       setCourses(prev => prev.filter(c => c.id !== courseToDelete.id));
       
       toast({
-        title: 'Cours supprimé',
-        description: `"${courseToDelete.title}" a été supprimé.`,
+        title: 'Course deleted',
+        description: `"${courseToDelete.title}" has been deleted.`,
       });
     } catch (error) {
       console.error('Error deleting course:', error);
       toast({
-        title: 'Erreur',
-        description: 'Impossible de supprimer le cours.',
+        title: 'Error',
+        description: 'Could not delete the course.',
         variant: 'destructive',
       });
     } finally {
@@ -248,12 +205,12 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getDisplayTitle = (course: Course): string => {
-    if (course.language === language || !course.language) {
-      return course.title;
-    }
-    return translatedTitles[course.id] || course.title;
-  };
+  // Calculate progress to next milestone
+  const currentPoints = profile?.total_points || 0;
+  const currentMilestoneIndex = POINTS_MILESTONES.findIndex(m => m > currentPoints) - 1;
+  const currentMilestone = POINTS_MILESTONES[Math.max(0, currentMilestoneIndex)];
+  const nextMilestone = POINTS_MILESTONES[currentMilestoneIndex + 1] || POINTS_MILESTONES[POINTS_MILESTONES.length - 1];
+  const progressToNext = ((currentPoints - currentMilestone) / (nextMilestone - currentMilestone)) * 100;
 
   const inProgressCourses = courses.filter(c => c.status === 'in_progress').length;
   const completedCourses = courses.filter(c => c.status === 'completed').length;
@@ -275,7 +232,7 @@ const Dashboard: React.FC = () => {
     },
     {
       label: t('dashboard.stats.points'),
-      value: profile?.total_points || 0,
+      value: currentPoints,
       icon: Trophy,
       color: 'text-warning',
       bgColor: 'bg-warning/10',
@@ -316,13 +273,7 @@ const Dashboard: React.FC = () => {
             {t('dashboard.welcome')}, {profile?.full_name || user?.email?.split('@')[0]}!
           </h1>
           <p className="text-muted-foreground mt-1">
-            Votre progression d'apprentissage
-            {translating && (
-              <span className="ml-2 inline-flex items-center gap-1 text-sm">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Traduction...
-              </span>
-            )}
+            Your learning progress
           </p>
         </div>
 
@@ -351,20 +302,49 @@ const Dashboard: React.FC = () => {
           ))}
         </div>
 
+        {/* Points Progress Bar */}
+        <Card className="border-border/50 mb-8">
+          <CardHeader>
+            <CardTitle className="font-display text-xl flex items-center gap-2">
+              <Star className="h-5 w-5 text-warning" />
+              {t('dashboard.pointsProgress')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{currentPoints} points</span>
+                <span className="text-muted-foreground">Next: {nextMilestone} points</span>
+              </div>
+              <Progress value={progressToNext} className="h-3" />
+              <div className="flex justify-between">
+                {POINTS_MILESTONES.slice(0, 6).map((milestone, i) => (
+                  <div 
+                    key={milestone}
+                    className={`text-xs ${currentPoints >= milestone ? 'text-primary font-medium' : 'text-muted-foreground'}`}
+                  >
+                    {milestone}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Upcoming Revisions */}
         {upcomingRevisions.length > 0 && (
           <Card className="border-border/50 mb-8">
             <CardHeader>
               <CardTitle className="font-display text-xl flex items-center gap-2">
                 <CalendarClock className="h-5 w-5" />
-                Révisions à venir
+                {t('dashboard.upcomingRevisions')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {upcomingRevisions.map((rev) => {
                   const date = parseISO(rev.revision_date);
-                  const dateLabel = isToday(date) ? "Aujourd'hui" : isTomorrow(date) ? "Demain" : format(date, "d MMMM", { locale: fr });
+                  const dateLabel = isToday(date) ? t('dashboard.today') : isTomorrow(date) ? t('dashboard.tomorrow') : format(date, "MMM d");
                   return (
                     <div 
                       key={rev.id}
@@ -408,10 +388,10 @@ const Dashboard: React.FC = () => {
               <div className="text-center py-12">
                 <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground mb-4">
-                  Vous n'avez pas encore de cours
+                  {t('dashboard.noCourses')}
                 </p>
                 <Button onClick={() => navigate('/')}>
-                  Créer mon premier cours
+                  {t('dashboard.createFirst')}
                 </Button>
               </div>
             ) : (
@@ -430,7 +410,7 @@ const Dashboard: React.FC = () => {
                     >
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-foreground truncate">
-                          {getDisplayTitle(course)}
+                          {course.title}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           {course.completed_lessons} / {course.total_lessons} {t('course.lessons')}
@@ -472,13 +452,13 @@ const Dashboard: React.FC = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer ce cours ?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this course?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irréversible. Le cours "{courseToDelete?.title}" et toutes ses leçons seront définitivement supprimés.
+              This action cannot be undone. The course "{courseToDelete?.title}" and all its lessons will be permanently deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Annuler</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={deleting}
@@ -487,12 +467,12 @@ const Dashboard: React.FC = () => {
               {deleting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Suppression...
+                  Deleting...
                 </>
               ) : (
                 <>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Supprimer
+                  Delete
                 </>
               )}
             </AlertDialogAction>

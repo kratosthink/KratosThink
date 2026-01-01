@@ -1,3 +1,11 @@
+/**
+ * Lesson Page - Individual lesson view with content, exercises, quiz, mindmap, and AI chat
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable Cloud (Supabase) for lesson data, progress tracking, and profiles
+ * - Lovable Cloud (Supabase Edge Functions) for AI features
+ * - Lovable AI Gateway for lesson chat and exercise grading
+ */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +33,7 @@ import { LessonQuiz } from '@/components/lesson/LessonQuiz';
 import { LessonMindmap } from '@/components/lesson/LessonMindmap';
 import { LessonChat } from '@/components/lesson/LessonChat';
 import { LessonExercises } from '@/components/lesson/LessonExercises';
+import { HighlightColorPicker } from '@/components/lesson/HighlightColorPicker';
 import { BadgeModal } from '@/components/badges/BadgeModal';
 import { exportLessonToPDF } from '@/utils/pdfExport';
 import { useStreak } from '@/hooks/useStreak';
@@ -44,13 +53,12 @@ interface CourseInfo {
   id: string;
   title: string;
   total_lessons: number;
-  language: string | null;
 }
 
 const Lesson: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();
   const { user, loading: authLoading } = useAuth();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { updateStreak } = useStreak();
@@ -59,12 +67,8 @@ const Lesson: React.FC = () => {
   const [lessons, setLessons] = useState<{ id: string; order_index: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
-  const [translating, setTranslating] = useState(false);
-  const [translatedContent, setTranslatedContent] = useState<{
-    title: string;
-    content: string;
-  } | null>(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const [highlightColor, setHighlightColor] = useState('#fbbf24');
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -75,23 +79,37 @@ const Lesson: React.FC = () => {
   useEffect(() => {
     if (user && lessonId) {
       fetchLesson();
+      fetchHighlightColor();
     }
   }, [user, lessonId]);
 
-  // Translate content when language changes
-  useEffect(() => {
-    if (lesson && course) {
-      const courseLanguage = course.language || 'en';
-      if (language !== courseLanguage) {
-        translateContent();
-      } else {
-        setTranslatedContent(null);
-      }
+  const fetchHighlightColor = async () => {
+    if (!user) return;
+    // LOVABLE SERVICE: Supabase Database
+    const { data } = await supabase
+      .from('profiles')
+      .select('highlight_color')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    if (data?.highlight_color) {
+      setHighlightColor(data.highlight_color);
     }
-  }, [language, lesson, course]);
+  };
+
+  const handleColorChange = async (color: string) => {
+    setHighlightColor(color);
+    if (!user) return;
+    // LOVABLE SERVICE: Supabase Database
+    await supabase
+      .from('profiles')
+      .update({ highlight_color: color })
+      .eq('user_id', user.id);
+  };
 
   const fetchLesson = async () => {
     try {
+      // LOVABLE SERVICE: Supabase Database
       const { data: lessonData, error } = await supabase
         .from('lessons')
         .select('*')
@@ -108,7 +126,7 @@ const Lesson: React.FC = () => {
 
       const { data: courseData } = await supabase
         .from('courses')
-        .select('id, title, total_lessons, language')
+        .select('id, title, total_lessons')
         .eq('id', lessonData.course_id)
         .maybeSingle();
 
@@ -132,40 +150,12 @@ const Lesson: React.FC = () => {
     }
   };
 
-  const translateContent = async () => {
-    if (!lesson || translating) return;
-    
-    setTranslating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('translate-content', {
-        body: {
-          title: lesson.title,
-          content: lesson.content,
-          targetLanguage: language,
-        },
-      });
-
-      if (error) throw error;
-      
-      if (data?.title && data?.content) {
-        setTranslatedContent({
-          title: data.title,
-          content: data.content,
-        });
-      }
-    } catch (error) {
-      console.error('Translation error:', error);
-      // Silently fail - show original content
-    } finally {
-      setTranslating(false);
-    }
-  };
-
   const handleComplete = async () => {
     if (!lesson || !user) return;
 
     setCompleting(true);
     try {
+      // LOVABLE SERVICE: Supabase Database - Update lesson and progress
       await supabase
         .from('lessons')
         .update({ is_completed: true, points_earned: 10 })
@@ -212,12 +202,8 @@ const Lesson: React.FC = () => {
         }
       }
 
-      // Update streak
       await updateStreak();
-
       setLesson({ ...lesson, is_completed: true });
-      
-      // Show badge modal
       setShowBadgeModal(true);
       
       toast({
@@ -236,8 +222,8 @@ const Lesson: React.FC = () => {
     
     exportLessonToPDF(
       {
-        title: translatedContent?.title || lesson.title,
-        content: translatedContent?.content || lesson.content,
+        title: lesson.title,
+        content: lesson.content,
         order_index: lesson.order_index,
       },
       course.title
@@ -249,12 +235,37 @@ const Lesson: React.FC = () => {
     });
   };
 
+  // Parse and highlight important content
+  const renderContent = (content: string) => {
+    // Split into paragraphs with more spacing
+    const paragraphs = content.split(/\n\n+/);
+    
+    return paragraphs.map((paragraph, index) => {
+      // Highlight important patterns: dates, key terms in **bold**, numbers
+      let highlighted = paragraph
+        // Highlight dates (years, full dates)
+        .replace(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4})\b/g, 
+          `<mark style="background-color: ${highlightColor}40; padding: 0 2px; border-radius: 2px;">$1</mark>`)
+        // Highlight bold text (already marked with **)
+        .replace(/\*\*([^*]+)\*\*/g, 
+          `<mark style="background-color: ${highlightColor}60; padding: 0 4px; border-radius: 3px; font-weight: 600;">$1</mark>`)
+        // Highlight important keywords
+        .replace(/\b(important|key|essential|crucial|significant|major|critical)\b/gi,
+          `<mark style="background-color: ${highlightColor}40; padding: 0 2px; border-radius: 2px;">$&</mark>`);
+
+      return (
+        <p 
+          key={index} 
+          className="text-foreground leading-loose mb-6"
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+      );
+    });
+  };
+
   const currentIndex = lessons.findIndex(l => l.id === lessonId);
   const prevLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
   const nextLesson = currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
-
-  const displayTitle = translatedContent?.title || lesson?.title || '';
-  const displayContent = translatedContent?.content || lesson?.content || '';
 
   if (loading || authLoading) {
     return (
@@ -300,20 +311,20 @@ const Lesson: React.FC = () => {
                   {t('course.completed')}
                 </span>
               )}
-              {translating && (
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Translating...
-                </span>
-              )}
             </div>
-            <Button variant="outline" size="sm" onClick={handleExportPDF}>
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
+            <div className="flex items-center gap-2">
+              <HighlightColorPicker 
+                color={highlightColor} 
+                onChange={handleColorChange} 
+              />
+              <Button variant="outline" size="sm" onClick={handleExportPDF}>
+                <Download className="h-4 w-4 mr-2" />
+                Export PDF
+              </Button>
+            </div>
           </div>
           <h1 className="font-display text-3xl font-bold text-foreground">
-            {displayTitle}
+            {lesson.title}
           </h1>
         </div>
 
@@ -345,13 +356,9 @@ const Lesson: React.FC = () => {
           <TabsContent value="content">
             <Card className="border-border/50">
               <CardContent className="pt-6 prose prose-slate dark:prose-invert max-w-none">
-                {displayContent ? (
-                  <div className="space-y-4">
-                    {displayContent.split(/\n\n+/).map((paragraph, index) => (
-                      <p key={index} className="text-foreground leading-relaxed">
-                        {paragraph}
-                      </p>
-                    ))}
+                {lesson.content ? (
+                  <div className="space-y-2">
+                    {renderContent(lesson.content)}
                   </div>
                 ) : (
                   <p className="text-muted-foreground">Loading lesson content...</p>
@@ -381,7 +388,7 @@ const Lesson: React.FC = () => {
           <TabsContent value="exercises">
             <LessonExercises 
               exercises={null}
-              lessonContent={displayContent}
+              lessonContent={lesson.content || ''}
             />
           </TabsContent>
 
@@ -401,8 +408,8 @@ const Lesson: React.FC = () => {
           <TabsContent value="chat">
             <LessonChat 
               lessonId={lesson.id}
-              lessonTitle={displayTitle}
-              lessonContent={displayContent}
+              lessonTitle={lesson.title}
+              lessonContent={lesson.content || ''}
             />
           </TabsContent>
         </Tabs>
@@ -443,7 +450,7 @@ const Lesson: React.FC = () => {
         onOpenChange={setShowBadgeModal}
         badgeName={t('badges.lessonComplete')}
         badgeDescription={t('badges.lessonCompleteDesc')}
-        lessonTitle={displayTitle}
+        lessonTitle={lesson.title}
         pointsEarned={10}
       />
     </div>

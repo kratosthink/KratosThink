@@ -1,3 +1,10 @@
+/**
+ * Generate Course Edge Function
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable Cloud (Supabase) for database operations
+ * - Lovable AI Gateway (google/gemini-2.5-flash) for course content generation
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -6,16 +13,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const languageMap: Record<string, string> = {
-  fr: 'Français',
-  en: 'English',
-  it: 'Italiano',
-  es: 'Español',
-  de: 'Deutsch',
-  ro: 'Română',
-  ru: 'Русский',
-  ar: 'العربية',
-  zh: '中文',
+const levelDescriptions: Record<string, string> = {
+  beginner: 'basic concepts and fundamentals, using simple language and plenty of examples',
+  intermediate: 'building on foundational knowledge, introducing more complex concepts',
+  advanced: 'deep technical content, complex analysis and advanced techniques',
+  expert: 'master-level comprehensive content with cutting-edge insights and research',
 };
 
 serve(async (req) => {
@@ -24,12 +26,13 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, language = 'fr' } = await req.json();
+    const { topic, level = 'intermediate', lessonCount = 6 } = await req.json();
     
     if (!topic) {
       throw new Error('Topic is required');
     }
 
+    // LOVABLE SERVICE: Lovable AI Gateway API Key
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured');
@@ -39,9 +42,10 @@ serve(async (req) => {
     const authHeader = req.headers.get('authorization');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // LOVABLE SERVICE: Supabase Client
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get user ID from JWT
     const jwt = authHeader?.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
     
@@ -49,79 +53,75 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const targetLanguage = languageMap[language] || 'Français';
-    console.log(`Generating course for topic: ${topic}, language: ${targetLanguage}, user: ${user.id}`);
+    const levelDesc = levelDescriptions[level] || levelDescriptions.intermediate;
+    console.log(`Generating ${level} course for topic: ${topic}, ${lessonCount} lessons, user: ${user.id}`);
 
-    // Enhanced prompt for richer content with more dates, events, quizzes
-    const prompt = `Tu es un expert pédagogue et historien/économiste/politicien/businessman de droite créateur de cours éducatifs de haute qualité. Crée un cours complet et détaillé sur le sujet suivant: "${topic}"
+    // Enhanced prompt with level and lesson count
+    const prompt = `You are an expert educator creating high-quality educational courses. Create a comprehensive course on: "${topic}"
 
-IMPORTANT: Tout le contenu DOIT être rédigé en ${targetLanguage}.
+LEVEL: ${level.toUpperCase()} - Focus on ${levelDesc}
+NUMBER OF LESSONS: ${lessonCount}
 
-Génère un cours avec 6 leçons détaillées. Pour chaque leçon, fournis:
+For each lesson, provide:
 
-1. Un titre clair et engageant (en ${targetLanguage})
+1. A clear, engaging title
 
-2. Un contenu TRÈS détaillé (700-1000 mots) structuré avec:
-   - Une introduction qui contextualise le sujet avec une DATE HISTORIQUE importante si applicable
-   - Des ÉVÉNEMENTS CLÉS avec leurs DATES précises (jour/mois/année quand possible)
-   - Plusieurs paragraphes bien séparés avec des sauts de ligne (\\n\\n)
-   - Des personnages importants avec leurs dates de naissance/mort
-   - Des chiffres et statistiques pertinents
-   - Des exemples concrets et cas pratiques datés
-   - Une chronologie des événements majeurs
-   - Une conclusion résumant les points clés
+2. VERY detailed content (800-1200 words) structured with:
+   - An introduction that contextualizes the subject with important HISTORICAL DATES if applicable
+   - KEY EVENTS with their precise DATES (day/month/year when possible)
+   - Multiple paragraphs well separated with line breaks (\\n\\n)
+   - Important figures with their birth/death dates
+   - Relevant numbers and statistics
+   - Concrete examples and dated case studies
+   - A timeline of major events
+   - A conclusion summarizing key points
    
-   IMPORTANT: Inclure AU MOINS 5 dates importantes par leçon si le sujet s'y prête.
+   **IMPORTANT**: Mark the most important terms and concepts with **bold** (double asterisks).
+   Include AT LEAST 5 important dates per lesson if the subject allows.
 
-3. Un quiz de 12 questions variées et approfondies:
-   - 3 questions sur les DATES et événements importants (ex: "En quelle année...?")
-   - 3 questions de compréhension conceptuelle
-   - 3 questions d'application pratique
-   - 3 questions d'analyse critique
+3. A quiz of 12 varied and in-depth questions:
+   - 3 questions about important DATES and events
+   - 3 conceptual understanding questions
+   - 3 practical application questions
+   - 3 critical analysis questions
    
-   Chaque question doit avoir:
-   - La question clairement formulée
-   - 4 options dont une seule correcte
-   - Un contexte explicatif (optionnel mais recommandé)
-   - Une explication de la bonne réponse
-   - Une date associée si pertinent
+   Each question must have:
+   - The clearly formulated question
+   - 4 options with only one correct
+   - An explanation of the correct answer
    
-   Format: QCM avec 4 options, indice correct (0-3)
+   Format: MCQ with 4 options, correct index (0-3)
 
-4. Une structure de mind map riche avec:
-   - Le concept central (titre de la leçon avec date clé)
-   - 5-7 branches principales représentant les concepts majeurs
-   - 2-4 sous-branches par branche principale avec détails spécifiques
-   - Des dates importantes intégrées dans les labels
+4. A rich mind map structure with:
+   - The central concept (lesson title with key date)
+   - 5-7 main branches representing major concepts
+   - 2-4 sub-branches per main branch with specific details
 
-Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
+Respond ONLY in valid JSON with this exact structure:
 {
-  "title": "Titre du cours en ${targetLanguage}",
-  "description": "Description engageante du cours (3-4 phrases) mentionnant la période historique couverte si applicable",
+  "title": "Course Title",
+  "description": "Engaging course description (3-4 sentences) mentioning the historical period covered if applicable",
   "lessons": [
     {
-      "title": "Titre de la leçon en ${targetLanguage}",
-      "content": "Contenu très détaillé avec dates, événements, personnages, paragraphes séparés par \\n\\n...",
+      "title": "Lesson Title",
+      "content": "Very detailed content with dates, events, figures, paragraphs separated by \\n\\n, **bold important terms**...",
       "quiz": [
         {
-          "question": "Question en ${targetLanguage} ?",
+          "question": "Question?",
           "options": ["Option A", "Option B", "Option C", "Option D"],
           "correct": 0,
-          "context": "Contexte historique ou explicatif (optionnel)",
-          "date": "Date associée si pertinent (optionnel)",
-          "explanation": "Explication de la bonne réponse"
+          "explanation": "Explanation of the correct answer"
         }
       ],
       "mindmap": {
         "id": "root",
-        "label": "Concept principal (avec date clé)",
+        "label": "Main concept (with key date)",
         "children": [
           {
             "id": "child1",
-            "label": "Branche 1 (avec date si pertinent)",
+            "label": "Branch 1",
             "children": [
-              { "id": "child1-1", "label": "Sous-concept détaillé", "children": [] },
-              { "id": "child1-2", "label": "Autre sous-concept", "children": [] }
+              { "id": "child1-1", "label": "Sub-concept", "children": [] }
             ]
           }
         ]
@@ -130,6 +130,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
   ]
 }`;
 
+    // LOVABLE SERVICE: Lovable AI Gateway
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -150,13 +151,13 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
       console.error('AI Gateway error:', aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: 'Limite de requêtes atteinte, réessayez plus tard.' }), {
+        return new Response(JSON.stringify({ error: 'Rate limit reached, please try again later.' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: 'Crédits insuffisants.' }), {
+        return new Response(JSON.stringify({ error: 'Insufficient credits.' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -176,7 +177,6 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
     // Parse JSON from AI response
     let courseData;
     try {
-      // Extract JSON from response (handle markdown code blocks)
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
       const jsonStr = jsonMatch ? jsonMatch[1] : content;
       courseData = JSON.parse(jsonStr.trim());
@@ -186,15 +186,15 @@ Réponds UNIQUEMENT en JSON valide avec cette structure exacte:
       throw new Error('Failed to parse course data');
     }
 
-    // Create course in database
+    // LOVABLE SERVICE: Supabase Database - Create course
     const { data: course, error: courseError } = await supabase
       .from('courses')
       .insert({
         user_id: user.id,
-        title: courseData.title || `Cours: ${topic}`,
+        title: courseData.title || `Course: ${topic}`,
         description: courseData.description || '',
         topic: topic,
-        language: language,
+        language: 'en',
         total_lessons: courseData.lessons?.length || 0,
         completed_lessons: 0,
         status: 'in_progress',
