@@ -8,6 +8,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { Navbar } from '@/components/layout/Navbar';
@@ -253,11 +254,17 @@ const Lesson: React.FC = () => {
         .replace(/\b(important|key|essential|crucial|significant|major|critical)\b/gi,
           `<mark style="background-color: ${highlightColor}40; padding: 0 2px; border-radius: 2px;">$&</mark>`);
 
+      // SECURITY: Sanitize HTML to prevent XSS attacks
+      const sanitized = DOMPurify.sanitize(highlighted, {
+        ALLOWED_TAGS: ['mark', 'p', 'br'],
+        ALLOWED_ATTR: ['style', 'class'],
+      });
+
       return (
         <p 
           key={index} 
           className="text-foreground leading-loose mb-6"
-          dangerouslySetInnerHTML={{ __html: highlighted }}
+          dangerouslySetInnerHTML={{ __html: sanitized }}
         />
       );
     });
