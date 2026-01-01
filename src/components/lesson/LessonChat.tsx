@@ -1,11 +1,19 @@
+/**
+ * Lesson Chat Component - AI-powered lesson assistant
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable Cloud (Supabase) for message persistence
+ * - Lovable Cloud (Supabase Edge Functions) for AI chat
+ * - Lovable AI Gateway (google/gemini-2.5-flash) for conversational AI
+ */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/i18n/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2, Bot, User, Maximize2, X } from 'lucide-react';
+import { Send, Loader2, Bot, User, Maximize2, X, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
@@ -20,6 +28,14 @@ interface LessonChatProps {
   lessonTitle: string;
   lessonContent: string;
 }
+
+// Quick prompts for users
+const QUICK_PROMPTS = [
+  { label: 'Explain', prompt: 'Can you explain the main concepts in simpler terms?' },
+  { label: 'Examples', prompt: 'Can you give me real-world examples?' },
+  { label: 'Quiz me', prompt: 'Can you quiz me on this lesson?' },
+  { label: 'Summary', prompt: 'Can you summarize the key points?' },
+];
 
 export const LessonChat: React.FC<LessonChatProps> = ({ 
   lessonId, 
@@ -43,12 +59,10 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     }
   }, [user, lessonId]);
 
-  // Auto-scroll when messages change or during typing
   useEffect(() => {
     scrollToBottom();
   }, [messages, displayedContent]);
 
-  // Cleanup typing effect on unmount
   useEffect(() => {
     return () => {
       if (typingIntervalRef.current) {
@@ -67,6 +81,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
   };
 
   const fetchMessages = async () => {
+    // LOVABLE SERVICE: Supabase Database
     const { data } = await supabase
       .from('chat_messages')
       .select('*')
@@ -88,13 +103,12 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     setIsTypingEffect(true);
     setDisplayedContent('');
 
-    // Fast typing speed
     const getTypingDelay = () => {
-      const base = 5;
-      const variation = Math.random() * 10;
+      const base = 3;
+      const variation = Math.random() * 8;
       const char = fullContent[currentIndex];
-      if (char === '.' || char === '!' || char === '?') return base + 30 + variation;
-      if (char === ',') return base + 15 + variation;
+      if (char === '.' || char === '!' || char === '?') return base + 20 + variation;
+      if (char === ',') return base + 10 + variation;
       return base + variation;
     };
 
@@ -102,12 +116,10 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       if (currentIndex < fullContent.length) {
         currentIndex++;
         setDisplayedContent(fullContent.substring(0, currentIndex));
-        // Auto-scroll during typing
         scrollToBottom();
         typingIntervalRef.current = setTimeout(typeNextChar, getTypingDelay());
       } else {
         setIsTypingEffect(false);
-        // Update the message with full content
         setMessages(prev => prev.map(m => 
           m.id === messageId ? { ...m, content: fullContent, isTyping: false } : m
         ));
@@ -117,40 +129,39 @@ export const LessonChat: React.FC<LessonChatProps> = ({
     typeNextChar();
   }, []);
 
-  const handleSend = async () => {
-    if (!input.trim() || loading || !user) return;
+  const handleSend = async (messageText?: string) => {
+    const textToSend = messageText || input.trim();
+    if (!textToSend || loading || !user) return;
 
-    const userMessage = input.trim();
     setInput('');
     
     const tempId = crypto.randomUUID();
-    setMessages(prev => [...prev, { id: tempId, role: 'user', content: userMessage }]);
+    setMessages(prev => [...prev, { id: tempId, role: 'user', content: textToSend }]);
     setLoading(true);
 
     try {
-      // Save user message
+      // LOVABLE SERVICE: Supabase Database
       await supabase.from('chat_messages').insert({
         user_id: user.id,
         lesson_id: lessonId,
         role: 'user',
-        content: userMessage,
+        content: textToSend,
       });
 
-      // Call AI
+      // LOVABLE SERVICE: Supabase Edge Functions + Lovable AI Gateway
       const { data, error } = await supabase.functions.invoke('lesson-chat', {
         body: {
-          message: userMessage,
+          message: textToSend,
           lessonTitle,
           lessonContent,
-          history: messages.slice(-6).map(m => ({ role: m.role, content: m.content })),
+          history: messages.slice(-8).map(m => ({ role: m.role, content: m.content })),
         },
       });
 
       if (error) throw error;
 
-      const assistantMessage = data?.response || "Désolé, je n'ai pas pu répondre.";
+      const assistantMessage = data?.response || "Sorry, I couldn't respond.";
       
-      // Save assistant message
       await supabase.from('chat_messages').insert({
         user_id: user.id,
         lesson_id: lessonId,
@@ -166,7 +177,6 @@ export const LessonChat: React.FC<LessonChatProps> = ({
         isTyping: true
       }]);
 
-      // Start typing effect
       setLoading(false);
       typeMessage(assistantMessage, assistantId);
 
@@ -175,7 +185,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       setMessages(prev => [...prev, { 
         id: crypto.randomUUID(), 
         role: 'assistant', 
-        content: "Erreur lors de la communication avec l'assistant." 
+        content: "Error communicating with the assistant." 
       }]);
       setLoading(false);
     }
@@ -186,8 +196,8 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <Bot className="h-5 w-5 text-muted-foreground" />
-            {t('course.chat')} - {lessonTitle}
+            <Bot className="h-5 w-5 text-primary" />
+            {t('course.chat')}
           </CardTitle>
           <Button
             variant="ghost"
@@ -201,12 +211,31 @@ export const LessonChat: React.FC<LessonChatProps> = ({
       <CardContent className="flex-1 flex flex-col overflow-hidden pb-4">
         <ScrollArea ref={scrollRef} className="flex-1 pr-4">
           {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-center p-8">
-              <div>
-                <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  {t('chat.placeholder')}
-                </p>
+            <div className="h-full flex flex-col items-center justify-center text-center p-8">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <Sparkles className="h-8 w-8 text-primary" />
+              </div>
+              <p className="text-lg font-medium text-foreground mb-2">
+                AI Learning Assistant
+              </p>
+              <p className="text-muted-foreground mb-6 max-w-sm">
+                Ask me anything about "{lessonTitle}" - I'm here to help you understand and learn!
+              </p>
+              
+              {/* Quick prompts */}
+              <div className="flex flex-wrap gap-2 justify-center">
+                {QUICK_PROMPTS.map((qp) => (
+                  <Button
+                    key={qp.label}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSend(qp.prompt)}
+                    disabled={loading}
+                    className="text-xs"
+                  >
+                    {qp.label}
+                  </Button>
+                ))}
               </div>
             </div>
           ) : (
@@ -217,12 +246,12 @@ export const LessonChat: React.FC<LessonChatProps> = ({
                   className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {message.role === 'assistant' && (
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Bot className="h-4 w-4" />
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                    className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                       message.role === 'user'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary text-secondary-foreground'
@@ -241,11 +270,15 @@ export const LessonChat: React.FC<LessonChatProps> = ({
               ))}
               {loading && (
                 <div className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Bot className="h-4 w-4" />
                   </div>
-                  <div className="bg-secondary rounded-lg px-4 py-3">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <div className="bg-secondary rounded-2xl px-4 py-3">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
                   </div>
                 </div>
               )}
@@ -253,22 +286,53 @@ export const LessonChat: React.FC<LessonChatProps> = ({
           )}
         </ScrollArea>
 
-        <div className="flex gap-2 mt-4 pt-4 border-t">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder={t('chat.placeholder')}
-            disabled={loading || isTypingEffect}
-            className="flex-1"
-          />
-          <Button onClick={handleSend} disabled={loading || isTypingEffect || !input.trim()} size="icon">
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-          </Button>
+        <div className="space-y-3 mt-4 pt-4 border-t">
+          {/* Quick prompts when there are messages */}
+          {messages.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {QUICK_PROMPTS.map((qp) => (
+                <Button
+                  key={qp.label}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSend(qp.prompt)}
+                  disabled={loading || isTypingEffect}
+                  className="text-xs h-7 px-2"
+                >
+                  {qp.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          
+          <div className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={t('chat.placeholder')}
+              disabled={loading || isTypingEffect}
+              className="flex-1 min-h-[44px] max-h-32 resize-none"
+              rows={1}
+            />
+            <Button 
+              onClick={() => handleSend()} 
+              disabled={loading || isTypingEffect || !input.trim()} 
+              size="icon"
+              className="h-11 w-11"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </>
@@ -285,7 +349,7 @@ export const LessonChat: React.FC<LessonChatProps> = ({
   }
 
   return (
-    <Card className="border-border/50 flex flex-col h-[500px]">
+    <Card className="border-border/50 flex flex-col h-[600px]">
       {chatContent}
     </Card>
   );

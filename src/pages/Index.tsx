@@ -1,3 +1,11 @@
+/**
+ * Index Page - Home/Landing Page
+ * 
+ * LOVABLE SERVICES USED:
+ * - Lovable Cloud (Supabase) for authentication state
+ * - Lovable Cloud (Supabase Edge Functions) for course generation
+ * - Lovable AI Gateway for AI-powered course content generation
+ */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -5,6 +13,7 @@ import { useLanguage } from '@/i18n/LanguageContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { GenerationModal } from '@/components/generation/GenerationModal';
 import { 
   Search,
   ArrowRight,
@@ -14,14 +23,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 const Index: React.FC = () => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchTopic, setSearchTopic] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
-  const handleGenerateCourse = async () => {
+  const handleStartGeneration = () => {
     if (!searchTopic.trim()) return;
 
     if (!user) {
@@ -29,18 +39,28 @@ const Index: React.FC = () => {
       return;
     }
 
+    setShowModal(true);
+  };
+
+  const handleGenerateCourse = async (level: string, lessonCount: number) => {
     setGenerating(true);
     try {
+      // LOVABLE SERVICE: Supabase Edge Functions + Lovable AI Gateway
       const { data, error } = await supabase.functions.invoke('generate-course', {
-        body: { topic: searchTopic, language }
+        body: { 
+          topic: searchTopic, 
+          level,
+          lessonCount,
+        }
       });
 
       if (error) throw error;
 
       if (data?.courseId) {
+        setShowModal(false);
         toast({
           title: t('common.success'),
-          description: 'Cours généré avec succès !',
+          description: 'Course generated successfully!',
         });
         navigate(`/course/${data.courseId}`);
       }
@@ -48,7 +68,7 @@ const Index: React.FC = () => {
       console.error('Error generating course:', error);
       toast({
         title: t('common.error'),
-        description: 'Erreur lors de la génération du cours',
+        description: 'Error generating course',
         variant: 'destructive',
       });
     } finally {
@@ -60,7 +80,7 @@ const Index: React.FC = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero Section - Minimal and Clean */}
+      {/* Hero Section */}
       <section className="relative min-h-[80vh] flex items-center justify-center">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
@@ -80,27 +100,18 @@ const Index: React.FC = () => {
                     type="text"
                     value={searchTopic}
                     onChange={(e) => setSearchTopic(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateCourse()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleStartGeneration()}
                     placeholder={t('home.searchPlaceholder')}
                     className="pl-12 h-14 text-lg rounded-lg border-border bg-card"
                   />
                 </div>
                 <Button 
-                  onClick={handleGenerateCourse}
-                  disabled={generating || !searchTopic.trim()}
+                  onClick={handleStartGeneration}
+                  disabled={!searchTopic.trim()}
                   className="h-14 px-8 text-lg rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                 >
-                  {generating ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      {t('common.loading')}
-                    </>
-                  ) : (
-                    <>
-                      {t('home.generateCourse')}
-                      <ArrowRight className="ml-2 h-5 w-5" />
-                    </>
-                  )}
+                  {t('home.generateCourse')}
+                  <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </div>
             </div>
@@ -128,6 +139,15 @@ const Index: React.FC = () => {
           <p>© 2025 KratosThink. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Generation Modal */}
+      <GenerationModal
+        open={showModal}
+        onOpenChange={setShowModal}
+        topic={searchTopic}
+        onGenerate={handleGenerateCourse}
+        generating={generating}
+      />
     </div>
   );
 };
