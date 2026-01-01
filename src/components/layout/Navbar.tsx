@@ -17,15 +17,11 @@ import {
   LogOut, 
   Moon, 
   Sun, 
-  Globe,
   Lightbulb,
-  Users
 } from 'lucide-react';
-import { Language, languageNames } from '@/i18n/translations';
-
 export const Navbar: React.FC = () => {
   const { user, signOut } = useAuth();
-  const { t, language, setLanguage } = useLanguage();
+  const { t } = useLanguage();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -49,19 +45,6 @@ export const Navbar: React.FC = () => {
 
         {/* Navigation */}
         <div className="flex items-center gap-2">
-          {/* Community Button */}
-          {user && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/feed')}
-              className="h-9 w-9"
-              title={t('nav.community')}
-            >
-              <Users className="h-4 w-4" />
-            </Button>
-          )}
-
           {/* Theme Toggle */}
           <Button
             variant="ghost"
@@ -76,26 +59,6 @@ export const Navbar: React.FC = () => {
             )}
           </Button>
 
-          {/* Language Selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9">
-                <Globe className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              {(Object.keys(languageNames) as Language[]).map((lang) => (
-                <DropdownMenuItem
-                  key={lang}
-                  onClick={() => setLanguage(lang)}
-                  className={language === lang ? 'bg-accent text-accent-foreground' : ''}
-                >
-                  {languageNames[lang]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* Auth Buttons or User Menu */}
           {user ? (
             <DropdownMenu>
@@ -108,10 +71,6 @@ export const Navbar: React.FC = () => {
                 <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                   <BookOpen className="mr-2 h-4 w-4" />
                   {t('nav.dashboard')}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/feed')}>
-                  <Users className="mr-2 h-4 w-4" />
-                  {t('nav.community')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
